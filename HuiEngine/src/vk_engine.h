@@ -109,6 +109,7 @@ public:
         VkDeviceMemory deviceMemory;
         VkImageView view;
         VkSampler sampler;
+        VkDescriptorSet descriptorSet;
     };
     
     StorageImage storageImages[MAX_FRAMES_IN_FLIGHT];
@@ -183,7 +184,6 @@ private:
     bool framebufferResized = false;
 
     double lastTime = 0.0f;
-
 private:
     
     void initWindow();
@@ -246,7 +246,7 @@ private:
     
     VkShaderModule createShaderModule(const std::vector<char>& code);
 private:
-    void saveSwapChainImage(VkImage swapChainImage, const std::string& outputDir = "result_images/", const std::string& filename = "Huiyu");
+    void saveStorageImage(const StorageImage& swapChainImage, const std::string& outputDir = "result_images/", const std::string& filename = "Huiyu");
 
     void populateDebugMessengerCreateInfo(VkDebugUtilsMessengerCreateInfoEXT& createInfo);
     void setupDebugMessenger();

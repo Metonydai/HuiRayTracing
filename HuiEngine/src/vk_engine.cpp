@@ -123,31 +123,23 @@ void ComputeShaderApplication::initVulkan() {
 
 void ComputeShaderApplication::initImgui() {
 
-    // 1: create descriptor pool for IMGUI
-    VkDescriptorPoolSize pool_sizes[] = 
-    { 
-        { VK_DESCRIPTOR_TYPE_SAMPLER, 1000 },
-        { VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1000 },
-        { VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1000 },
-        { VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1000 },
-        { VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER, 1000 },
-        { VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER, 1000 },
-        { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1000 },
-        { VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1000 },
-        { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, 1000 },
-        { VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC, 1000 },
-        { VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, 1000 } 
-    };
+    // Create descriptor pool for IMGUI
+    {
+        VkDescriptorPoolSize pool_sizes[] =
+        {
+            { VK_DESCRIPTOR_TYPE_SAMPLER, 2 },
+        };
 
-    VkDescriptorPoolCreateInfo pool_info = {};
-    pool_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-    pool_info.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
-    pool_info.maxSets = 1000;
-    pool_info.poolSizeCount = (uint32_t)std::size(pool_sizes);
-    pool_info.pPoolSizes = pool_sizes;
+        VkDescriptorPoolCreateInfo pool_info = {};
+        pool_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+        pool_info.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
+        pool_info.maxSets = 1000;
+        pool_info.poolSizeCount = (uint32_t)std::size(pool_sizes);
+        pool_info.pPoolSizes = pool_sizes;
 
-    if (vkCreateDescriptorPool(device, &pool_info, nullptr, &imguiPool) != VK_SUCCESS) {
-        throw std::runtime_error("failed to create imguiPool!");
+        if (vkCreateDescriptorPool(device, &pool_info, nullptr, &imguiPool) != VK_SUCCESS) {
+            throw std::runtime_error("failed to create imguiPool!");
+        }
     }
 
     // 2: initialize imgui library
@@ -190,6 +182,12 @@ void ComputeShaderApplication::initImgui() {
     ImGui_ImplVulkan_CreateFontsTexture();
 
     io.FontGlobalScale = 1.5f;
+
+    // Create Descriptor Set using ImGUI's implementation
+    for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
+    {
+        storageImages[i].descriptorSet = ImGui_ImplVulkan_AddTexture(storageImages[i].sampler, storageImages[i].view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+    }
 }
 
 void ComputeShaderApplication::mainLoop() {
@@ -202,7 +200,7 @@ void ComputeShaderApplication::mainLoop() {
         ImGui_ImplGlfw_NewFrame();
 
         ImGui::NewFrame();
-
+        // Settings
         ImGui::Begin("Settings");
         ImGui::Text("Huiyu, I love you.");
 
@@ -218,15 +216,21 @@ void ComputeShaderApplication::mainLoop() {
         ImGui::DragFloat2("velocity", &adjustVelocity.x, 0.1f);
         ImGui::ColorEdit3("color", &adjustColor.r);
 
-        if (ImGui::Button("Adjust particles"))
-        {
-        }
-
-        if (ImGui::Button("Reset"))
-        {
-        }
+        if (ImGui::Button("Adjust particles")) {}
 
         ImGui::End();
+
+
+#if 0
+        // Viewport
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2{ 0, 0 });
+        ImGui::Begin("Viewport");
+        ImVec2 viewportPanelSize = ImGui::GetContentRegionAvail();
+
+        //ImGui::Image((ImTextureID)storageImages[currentFrame].descriptorSet, ImVec2{ viewportPanelSize.x, viewportPanelSize.y }, ImVec2{ 0, 1 }, ImVec2{ 1, 0 });
+        ImGui::End();
+        ImGui::PopStyleVar();
+#endif
 
         ImGui::Render();
 
@@ -499,7 +503,7 @@ void ComputeShaderApplication::createSwapChain() {
     createInfo.imageColorSpace = surfaceFormat.colorSpace;
     createInfo.imageExtent = extent;
     createInfo.imageArrayLayers = 1;
-    createInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+    createInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
 
     QueueFamilyIndices indices = findQueueFamilies(physicalDevice);
     uint32_t queueFamilyIndices[] = { indices.graphicsAndComputeFamily.value(), indices.presentFamily.value() };
@@ -862,7 +866,7 @@ void ComputeShaderApplication::createShaderStorageImages() {
         // Create image view
         createImage(storageImages[i].width, storageImages[i].height,
             storageImages[i].format, VK_IMAGE_TILING_OPTIMAL,
-            VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+            VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
             storageImages[i].image, storageImages[i].deviceMemory);
 
         insertImageMemoryBarrier(
@@ -1380,7 +1384,7 @@ void ComputeShaderApplication::drawFrame() {
     recordCommandBuffer(commandBuffers[currentFrame], imageIndex);
 
     VkSemaphore waitSemaphores[] = { computeFinishedSemaphores[currentFrame], imageAvailableSemaphores[currentFrame] };
-    VkPipelineStageFlags waitStages[] = { VK_PIPELINE_STAGE_VERTEX_INPUT_BIT, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
+    VkPipelineStageFlags waitStages[] = { VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
     submitInfo = {};
     submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
 
@@ -1399,7 +1403,7 @@ void ComputeShaderApplication::drawFrame() {
     if (screenshotRequested) {
         screenshotRequested = false;
 
-        saveSwapChainImage(swapChainImages[imageIndex]);
+        saveStorageImage(storageImages[currentFrame]);
     }
 
     VkPresentInfoKHR presentInfo{};
@@ -1462,7 +1466,7 @@ void ComputeShaderApplication::createImage(uint32_t width, uint32_t height, VkFo
     vkBindImageMemory(device, image, imageMemory, 0);
 }
 
-void ComputeShaderApplication::saveSwapChainImage(VkImage swapChainImage, const std::string& outputDir, const std::string& filename)
+void ComputeShaderApplication::saveStorageImage(const StorageImage& storageImage, const std::string& outputDir, const std::string& filename)
 {
     const char* imagedata;
 
@@ -1486,29 +1490,34 @@ void ComputeShaderApplication::saveSwapChainImage(VkImage swapChainImage, const 
         VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
         VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT);
 
-    // Transition swapchain image to TRANSFER_SRC_OPTIMAL
+    // Transition storage image to TRANSFER_SRC_OPTIMAL
     insertImageMemoryBarrier(
         copyCmd,
-        swapChainImage,
+        storageImage.image,
         0, VK_ACCESS_TRANSFER_READ_BIT,
-        VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+        VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
         VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT);
 
-    VkImageCopy imageCopyRegion{};
-    imageCopyRegion.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-    imageCopyRegion.srcSubresource.layerCount = 1;
-    imageCopyRegion.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-    imageCopyRegion.dstSubresource.layerCount = 1;
-    imageCopyRegion.extent.width = swapChainExtent.width;
-    imageCopyRegion.extent.height = swapChainExtent.height;
-    imageCopyRegion.extent.depth = 1;
+    VkImageBlit blit{};
+    blit.srcOffsets[0] = { 0, 0, 0 };
+    blit.srcOffsets[1] = { (int)storageImage.width, (int)storageImage.height, 1 };
+    blit.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    blit.srcSubresource.mipLevel = 0;
+    blit.srcSubresource.baseArrayLayer = 0;
+    blit.srcSubresource.layerCount = 1;
+    blit.dstOffsets[0] = { 0, (int)swapChainExtent.height, 0 };
+    blit.dstOffsets[1] = { (int)swapChainExtent.width, 0, 1};
+    blit.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    blit.dstSubresource.mipLevel = 0;
+    blit.dstSubresource.baseArrayLayer = 0;
+    blit.dstSubresource.layerCount = 1;
 
-    vkCmdCopyImage(
+    vkCmdBlitImage(
         copyCmd,
-        swapChainImage, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+        storageImage.image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
         dstImage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-        1,
-        &imageCopyRegion);
+        1, &blit,
+        VK_FILTER_LINEAR);
 
     // Transition destination image to general layout, which is the required layout for mapping the image memory later on
     insertImageMemoryBarrier(
@@ -1518,12 +1527,12 @@ void ComputeShaderApplication::saveSwapChainImage(VkImage swapChainImage, const 
         VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL,
         VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT);
 
-    // Transition swapchain image back to present layout
+    // Transition storage image back to VK_IMAGE_LAYOUT_GENERAL
     insertImageMemoryBarrier(
         copyCmd,
-        swapChainImage,
+        storageImage.image,
         VK_ACCESS_TRANSFER_READ_BIT, VK_ACCESS_MEMORY_READ_BIT,
-        VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+        VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL,
         VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT);
 
     endSingleTimeCommands(copyCmd);
