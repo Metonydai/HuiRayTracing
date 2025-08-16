@@ -66,7 +66,7 @@ void ComputeShaderApplication::createScene()
     pushConstantData.screenSize[0] = WIDTH;
     pushConstantData.screenSize[1] = HEIGHT;
     pushConstantData.samplesPerPixel = 4;
-    pushConstantData.maxDepth = 50;
+    pushConstantData.maxDepth = 10;
 
     hittables.Allocate<Sphere>(glm::vec3{ 0.0, 0.0, 0.0 }, 0.5f);
     hittables.Allocate<Sphere>(glm::vec3{ 0.0, -100.5, 0.0 }, 100.0f);
