@@ -63,18 +63,24 @@ void main()
     int i = int(gl_GlobalInvocationID.x);
     int j = int(gl_GlobalInvocationID.y);
 
-    const vec2 pixelCenter = vec2(gl_GlobalInvocationID.xy) + vec2(0.5);
-	vec2 inUV = pixelCenter / dim;
-    vec2 d = inUV * 2.0 - 1.0; // NDC-coord
+    vec3 finalColor = vec3(0);
 
-    vec4 origin    = ubo.viewInverse * vec4(0, 0, 0, 1);
-    vec4 target    = ubo.projInverse * vec4(d.x, d.y, 1, 1); // in view space
-    vec4 direction = ubo.viewInverse * vec4(normalize(target.xyz), 0); // direction in world space
+    for (int s = 0; s < push.samples; s++)
+    {
+        vec2 pixelCenter = vec2(gl_GlobalInvocationID.xy) + Rand();
+	    vec2 inUV = pixelCenter / dim;
+        vec2 d = inUV * 2.0 - 1.0; // NDC-coord
 
-    Ray r;
-    Init(r, origin.xyz, direction.xyz);
+        vec4 origin    = ubo.viewInverse * vec4(0, 0, 0, 1);
+        vec4 target    = ubo.projInverse * vec4(d.x, d.y, 1, 1); // in view space
+        vec4 direction = ubo.viewInverse * vec4(normalize(target.xyz), 0); // direction in world space
+        
+        Ray r;
+        Init(r, origin.xyz, direction.xyz);
+        finalColor += RayColor(r);
+    }
 
-    vec3 finalColor = RayColor(r);
+    finalColor /= push.samples;
 
 	imageStore(outputImage, ivec2(gl_GlobalInvocationID.xy), vec4(finalColor, 1.0));
 }
