@@ -1,14 +1,16 @@
 #include "VulkanTools.h"
 #include "VulkanInitializers.hpp"
 
+#include "DataDump.h"
+#include "Camera.h"
+#include "EditorCamera.h"
+
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
 
 #define GLM_FORCE_RADIANS
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
-
-#include "DataDump.h"
 
 #include <iostream>
 #include <fstream>
@@ -41,9 +43,8 @@ struct SwapChainSupportDetails {
 };
 
 struct UniformBufferObject {
-    glm::vec2 u_resolution = { WIDTH, HEIGHT };
-    float deltaTime = 0.0f;
-    float gravity = 0.0f;
+    glm::mat4 viewInverse;
+    glm::mat4 projInverse;
 };
 
 struct Particle {
@@ -116,16 +117,13 @@ public:
 
 public:
     UniformBufferObject ubo{};
-    std::vector<Particle> particles;
-    glm::vec2 initialPosition = glm::vec2(0.0f, 0.0f);
-    glm::vec2 initialVelocity = glm::vec2(0.0f, 0.0f);
-    glm::vec4 initialColor = glm::vec4(0.25f, 0.75f, 1.0f, 1.0f);
-    glm::vec2 adjustPosition = initialPosition;
-    glm::vec2 adjustVelocity = initialVelocity;
-    glm::vec4 adjustColor = initialColor;
 
+    Huiluna::EditorCamera m_Camera;
+
+public:
+    inline static GLFWwindow* GetWindow() { return window; }
 private:
-    GLFWwindow* window;
+    static GLFWwindow* window;
 
     VkInstance instance;
     VkDebugUtilsMessengerEXT debugMessenger;
@@ -230,7 +228,7 @@ private:
 
     void copyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size);
     void createBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer& buffer, VkDeviceMemory& bufferMemory);
-    void updateUniformBuffer(uint32_t currentImage);
+    void updateUniformBuffers(uint32_t currentImage);
     
     void createImage(uint32_t width, uint32_t height, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties, VkImage& image, VkDeviceMemory& imageMemory);
     void insertImageMemoryBarrier(

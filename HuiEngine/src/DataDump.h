@@ -1,4 +1,7 @@
 #pragma once
+
+#include "Camera.h"
+
 #include <vector>
 #include <glm/glm.hpp>
 
@@ -10,7 +13,7 @@ struct PushConstantData
 	uint32_t screenSize[2];
 	uint32_t hittableCount;
 	//uint32_t sampleStart;
-	//uint32_t samples;
+	uint32_t samplesPerPixel;
 	//uint32_t totalSamples;
 	uint32_t maxDepth;
 };
@@ -29,7 +32,7 @@ public:
 	{
 		static_assert(std::is_base_of_v<Ty, Derived>, "need to derive from Ty");
 		auto ret = new Derived(std::forward<Args>(args)...);
-		ret->ptr = handles.size();
+		ret->ptr = (uint32_t)handles.size();
 		handles.push_back(ret);
 		return ret;
 	}
@@ -44,11 +47,11 @@ public:
 	}
 	uint32_t HeadSize()
 	{
-		return heads.size() * sizeof(GlslTy);
+		return (uint32_t)heads.size() * sizeof(GlslTy);
 	}
 	uint32_t DumpSize()
 	{
-		return dump.size() * sizeof(DumpTy);
+		return (uint32_t)dump.size() * sizeof(DumpTy);
 	}
 
 	void WriteMemory(VkDevice device, VkDeviceMemory headMemory, VkDeviceMemory dumpMemory)
@@ -123,7 +126,7 @@ public:
 class HittableDump : public DataDump<Hittable, GLSLHittable, glm::vec4>
 {
 public:
-	uint32_t Count() { return handles.size(); }
+	uint32_t Count() { return (uint32_t)handles.size(); }
 	void Dump()
 	{
 		heads.clear();

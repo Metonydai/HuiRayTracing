@@ -1,5 +1,10 @@
 #include "vk_engine.h"
 
+#include "Events/MouseEvent.h"
+#include "Events/KeyEvent.h"
+#include "Events/ApplicationEvent.h"
+
+
 #include "imgui.h"
 #include "backends/imgui_impl_vulkan.h"
 #include "backends/imgui_impl_glfw.h"
@@ -45,6 +50,7 @@ void DestroyDebugUtilsMessengerEXT(VkInstance instance, VkDebugUtilsMessengerEXT
     }
 }
 
+GLFWwindow* ComputeShaderApplication::window = nullptr;
 
 void ComputeShaderApplication::run() {
     initWindow();
@@ -59,12 +65,32 @@ void ComputeShaderApplication::createScene()
 {
     pushConstantData.screenSize[0] = WIDTH;
     pushConstantData.screenSize[1] = HEIGHT;
+    pushConstantData.samplesPerPixel = 4;
     pushConstantData.maxDepth = 50;
 
-    hittables.Allocate<Sphere>(glm::vec3{ 0.0, 0.0, -1.0 }, 0.5);
-    hittables.Allocate<Sphere>(glm::vec3{ 0.0, -100.5, -1.0 }, 100);
+    hittables.Allocate<Sphere>(glm::vec3{ 0.0, 0.0, 0.0 }, 0.5f);
+    hittables.Allocate<Sphere>(glm::vec3{ 0.0, -100.5, 0.0 }, 100.0f);
 
     pushConstantData.hittableCount = hittables.Count();
+
+#if 0
+    // Camera
+    const float aspectRatio = (float)WIDTH / (float)HEIGHT;
+    float vfov = 30.f;
+    float distToFocus = 1.0f;
+    float aperture = 0.0f;
+    glm::vec3 lookfrom{ 0.0f };
+    glm::vec3 lookat{ 0.0, -distToFocus, 0.0 };
+    glm::vec3 vup{ 0, 1, 0 };
+
+    glm::vec3 cameraCenter{ 0.0f };
+    //m_Camera = Camera(lookfrom, lookat, vup, vfov, aspectRatio, aperture, distToFocus);
+#endif
+    float vfov = 45.0f;
+    float distToFocus = 2.5f;
+    const float aspectRatio = (float)WIDTH / (float)HEIGHT;
+    m_Camera = Huiluna::EditorCamera(vfov, aspectRatio);
+    m_Camera.SetDistance(distToFocus);
 }
 
 void ComputeShaderApplication::writeMemoryFromHost()
@@ -84,8 +110,15 @@ void ComputeShaderApplication::initWindow()
     window = glfwCreateWindow(WIDTH, HEIGHT, "Vulkan", nullptr, nullptr);
     glfwSetWindowUserPointer(window, this);
     glfwSetFramebufferSizeCallback(window, framebufferResizeCallback);
-
     glfwSetKeyCallback(window, key_callback);
+
+    glfwSetScrollCallback(window, [](GLFWwindow* window, double xOffset, double yOffset)
+    {
+        auto app = reinterpret_cast<ComputeShaderApplication*>(glfwGetWindowUserPointer(window));
+        using namespace Huiluna;
+        MouseScrolledEvent event((float)xOffset, (float)yOffset);
+        app->m_Camera.OnEvent(event);
+    });
 
     lastTime = glfwGetTime();
 }
@@ -194,12 +227,13 @@ void ComputeShaderApplication::mainLoop() {
     while (!glfwWindowShouldClose(window)) {
         glfwPollEvents();  // process inputs and OS events
 
+
         ImGuiIO& io = ImGui::GetIO();
 
         ImGui_ImplVulkan_NewFrame();
         ImGui_ImplGlfw_NewFrame();
-
         ImGui::NewFrame();
+
         // Settings
         ImGui::Begin("Settings");
         ImGui::Text("Huiyu, I love you.");
@@ -208,13 +242,12 @@ void ComputeShaderApplication::mainLoop() {
 
         ImGui::Text("FPS: %.2f", 1 / lastFrameTime);
         ImGui::Text("Last render: %.3fms", lastFrameTime * 1000);
-        ImGui::DragFloat("gravity", &ubo.gravity, 0.1f);
 
         ImGui::Separator();
         ImGui::Text("Partical Settings");
-        ImGui::DragFloat2("position", &adjustPosition.x, 0.1f, -1.0f, 1.0f);
-        ImGui::DragFloat2("velocity", &adjustVelocity.x, 0.1f);
-        ImGui::ColorEdit3("color", &adjustColor.r);
+        //ImGui::DragFloat2("position", &adjustPosition.x, 0.1f, -1.0f, 1.0f);
+        //ImGui::DragFloat2("velocity", &adjustVelocity.x, 0.1f);
+        //ImGui::ColorEdit3("color", &adjustColor.r);
 
         if (ImGui::Button("Adjust particles")) {}
 
@@ -235,6 +268,7 @@ void ComputeShaderApplication::mainLoop() {
         ImGui::Render();
 
         drawFrame();
+        m_Camera.OnUpdate((float)lastFrameTime);
 
         // Update and Render additional Platform Windows
         if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable)
@@ -331,13 +365,14 @@ void ComputeShaderApplication::cleanup() {
 void ComputeShaderApplication::recreateSwapChain() {
     int width = 0, height = 0;
     glfwGetFramebufferSize(window, &width, &height);
-    while (width == 0 || height == 0) {
+    while (width == 0 || height == 0) 
+    {
         glfwGetFramebufferSize(window, &width, &height);
         glfwWaitEvents();
     }
     pushConstantData.screenSize[0] = width;
     pushConstantData.screenSize[1] = height;
-    ubo.u_resolution = { width, height };
+    m_Camera.SetViewportSize((float)width, (float)height);
 
     vkDeviceWaitIdle(device);
 
@@ -1334,9 +1369,10 @@ void ComputeShaderApplication::createSyncObjects() {
     }
 }
 
-void ComputeShaderApplication::updateUniformBuffer(uint32_t currentImage) {
+void ComputeShaderApplication::updateUniformBuffers(uint32_t currentImage) {
 
-    ubo.deltaTime = (float)lastFrameTime/* * 2.0f*/;
+    ubo.viewInverse = m_Camera.GetViewInverse();
+    ubo.projInverse = m_Camera.GetProjectionInverse();
 
     memcpy(uniformBuffersMapped[currentImage], &ubo, sizeof(ubo));
 }
@@ -1348,7 +1384,7 @@ void ComputeShaderApplication::drawFrame() {
     // Compute submission
     vkWaitForFences(device, 1, &computeInFlightFences[currentFrame], VK_TRUE, UINT64_MAX);
 
-    updateUniformBuffer(currentFrame);
+    updateUniformBuffers(currentFrame);
 
     vkResetFences(device, 1, &computeInFlightFences[currentFrame]);
 
@@ -1690,10 +1726,12 @@ VkPresentModeKHR ComputeShaderApplication::chooseSwapPresentMode(const std::vect
 }
 
 VkExtent2D ComputeShaderApplication::chooseSwapExtent(const VkSurfaceCapabilitiesKHR& capabilities) {
-    if (capabilities.currentExtent.width != std::numeric_limits<uint32_t>::max()) {
+    if (capabilities.currentExtent.width != std::numeric_limits<uint32_t>::max()) 
+    {
         return capabilities.currentExtent;
     }
-    else {
+    else 
+    {
         int width, height;
         glfwGetFramebufferSize(window, &width, &height);
 
