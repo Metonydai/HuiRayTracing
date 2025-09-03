@@ -45,6 +45,9 @@ struct SwapChainSupportDetails {
 struct UniformBufferObject {
     glm::mat4 viewInverse;
     glm::mat4 projInverse;
+    float defocusAngle;
+    float defocusRadius;
+    float focusDist;
 };
 
 struct Particle {
@@ -97,6 +100,7 @@ public:
     void run();
 public:
     HittableDump hittables;
+    MaterialDump materials;
     PushConstantData pushConstantData;
 
     void createScene();
@@ -154,8 +158,9 @@ private:
 
     VkCommandPool commandPool;
 
-    std::array<VkBuffer, 2> shaderStorageBuffers;
-    std::array<VkDeviceMemory, 2> shaderStorageBuffersMemory;
+    // For hittables and materials
+    std::array<VkBuffer, 4> shaderStorageBuffers;
+    std::array<VkDeviceMemory, 4> shaderStorageBuffersMemory;
 
     std::vector<VkBuffer> uniformBuffers;
     std::vector<VkDeviceMemory> uniformBuffersMemory;

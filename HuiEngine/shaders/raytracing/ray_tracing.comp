@@ -4,10 +4,11 @@
 #include "Ray.comph"
 #include "Hittable.comph"
 #include "Random.comph"
+#include "Material.comph"
 
 layout (local_size_x = 32, local_size_y = 32, local_size_z = 1) in;
 
-layout(push_constant) uniform PushConstants {
+layout (push_constant) uniform PushConstants {
     ivec2 screenSize;
     uint hittableCount;
     uint samples;
@@ -18,11 +19,32 @@ layout(push_constant) uniform PushConstants {
 layout (set = 0, binding = 0) uniform UniformBuffer {
     mat4 viewInverse;
     mat4 projInverse;
+    float defocusAngle;
+    float defocusRadius;
+    float focusDist;
 } ubo;
 
 layout (set = 0, binding = 1, rgba8) uniform writeonly image2D outputImage;
 
-layout (set = 0, binding = 2, std430) readonly buffer HittableBuffer
+// Material related buffer
+layout (set = 0, binding = 2, std430) readonly buffer MaterialBuffer
+{
+    Material materials[];
+};
+
+Interface
+void Deref(out Material mat, Pointer ptr) { mat = materials[ptr]; }
+
+layout (set = 0, binding = 3, std430) readonly buffer MaterialDumpBuffer
+{
+    vec4 data[];
+} materialData;
+
+Interface
+void Deref(Material, out vec4 data, Pointer ptr) { data = materialData.data[ptr];}
+
+// Hittable related buffer
+layout (set = 0, binding = 4, std430) readonly buffer HittableBuffer
 {
     Hittable hittables[];
 };
@@ -30,7 +52,7 @@ layout (set = 0, binding = 2, std430) readonly buffer HittableBuffer
 Interface
 void Deref(out Hittable hittable, Pointer ptr) { hittable = hittables[ptr]; }
 
-layout(set = 0, binding = 3, std430) readonly buffer HittableDumpBuffer
+layout (set = 0, binding = 5, std430) readonly buffer HittableDumpBuffer
 {
     vec4 data[];
 } hittableData;
@@ -42,27 +64,32 @@ vec3 BackgroundColor(Ray r);
 
 vec3 RayColor(const in Ray ray) 
 {
-    HitRecord rec;
-    vec3 color = vec3(0.0f);
+    vec3 color = vec3(1.0f);
+    vec3 color_from_emission = vec3(0.0f);
     Ray nextRay = ray;
-    float attenuation = 0.5;
-    int bounces = 0;
     
     for (int depth = 0; depth < push.maxDepth; depth++)
     {
+        HitRecord rec;
         if (HitAny(push.hittableCount, nextRay, 0.001, 100000.0, rec))
         {
-            vec3 direction = RandSemiUnitBall(rec.normal);
-            nextRay.origin = rec.p;
-            nextRay.direction = direction;
-            bounces++;
+            vec3 attenuation;
+            Material mat;
+            Deref(mat, rec.mat);
+            if (mat.type == MaterialEnum.Diffuselight)
+            {
+                vec4 data;
+                Deref(mat, data, mat.ptr);
+                color_from_emission += vec3(data);
+                return color + color_from_emission;
+            }
+            else if (Scatter(mat, nextRay, rec, attenuation, nextRay))
+                color *= attenuation;
+            else return vec3(0);
         }
         else
-        {
-            return pow(attenuation, bounces) * BackgroundColor(nextRay);
-        }
+            return color * BackgroundColor(nextRay);
     }
-
     return vec3(0);
 }
 
@@ -82,13 +109,23 @@ void main()
 
     for (int s = 0; s < push.samples; s++)
     {
+    
         vec2 pixelCenter = vec2(gl_GlobalInvocationID.xy) + Rand();
 	    vec2 inUV = pixelCenter / dim;
         vec2 d = inUV * 2.0 - 1.0; // NDC-coord
 
-        vec4 origin    = ubo.viewInverse * vec4(0, 0, 0, 1);
-        vec4 target    = ubo.projInverse * vec4(d.x, d.y, 1, 1); // in view space
-        vec4 direction = ubo.viewInverse * vec4(normalize(target.xyz), 0); // direction in world space
+        vec4 apertureView = (ubo.defocusAngle <= 0.0) ? 
+            vec4(0, 0, 0, 1) : 
+            vec4(ubo.defocusRadius * RandDisk(), 0, 1);
+     
+        vec4 origin    = ubo.viewInverse * apertureView;  // world space
+        vec4 target    = ubo.projInverse * vec4(d, 1, 1); // in view space, but the target is at far plane
+        //vec4 direction = ubo.viewInverse * vec4(normalize(target.xyz), 0); // direction in world space
+
+        target = target * (-ubo.focusDist) / target.z;  // scale
+        target = ubo.viewInverse * vec4(target.xyz, 1); // in world space
+        
+        vec4 direction = target - origin;
         
         Ray r;
         Init(r, origin.xyz, direction.xyz);

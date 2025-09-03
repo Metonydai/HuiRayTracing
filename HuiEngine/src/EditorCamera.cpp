@@ -23,6 +23,26 @@ namespace Huiluna {
 		UpdateView();
 	}
 
+	EditorCamera::EditorCamera(glm::vec3 lookFrom, glm::vec3 lookAt, glm::vec3 up,
+		                       float fov, float aspectRatio, float nearClip, float farClip)
+		: m_FOV(fov), m_AspectRatio(aspectRatio), m_NearClip(nearClip), m_FarClip(farClip)
+	{
+		m_Projection = glm::perspective(glm::radians(fov), aspectRatio, nearClip, farClip);
+		m_ProjInverse = glm::inverse(m_Projection);
+
+		m_ViewMatrix = glm::lookAt(lookFrom, lookAt, up);
+		m_ViewInverse = glm::inverse(m_ViewMatrix);
+
+		glm::quat q = glm::quat_cast(m_ViewMatrix);
+		glm::vec3 euler = glm::eulerAngles(q); // radians
+		m_Pitch = euler.x;
+		m_Yaw = euler.y;
+
+		m_FocalPoint = lookAt;
+		m_Position = lookFrom;
+		m_Distance = glm::length(lookFrom - lookAt);
+	}
+
 	void EditorCamera::UpdateProjection()
 	{
 		m_AspectRatio = m_ViewportWidth / m_ViewportHeight;

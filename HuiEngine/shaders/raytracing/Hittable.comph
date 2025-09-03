@@ -9,7 +9,8 @@ const struct
     uint None;
     uint TriangleMesh;
     uint Sphere;
-} HittableEnum = {0,1,2};
+    uint Quad;
+} HittableEnum = {0,1,2,3};
 
 struct Hittable
 {
@@ -22,6 +23,13 @@ struct Sphere
 {
     vec3 center;
     float radius;
+};
+
+struct Quad
+{
+    vec3 Q;
+    vec3 u;
+    vec3 v;
 };
 
 Interface
@@ -37,5 +45,9 @@ bool Hit(Hittable hittable, Ray r, float t_min, float t_max, out HitRecord rec);
 
 void Init(inout Sphere self, vec3 center, float radius);
 bool Hit(Sphere self, Ray r, float t_min, float t_max, out HitRecord rec);
+
+void Init(inout Quad self, vec3 Q, vec3 u, vec3 v);
+bool Hit(Quad self, Ray r, float t_min, float t_max, out HitRecord rec);
+bool IsInterior(float a, float b);
 
 #endif

@@ -65,40 +65,108 @@ void ComputeShaderApplication::createScene()
 {
     pushConstantData.screenSize[0] = WIDTH;
     pushConstantData.screenSize[1] = HEIGHT;
-    pushConstantData.samplesPerPixel = 4;
-    pushConstantData.maxDepth = 10;
+    pushConstantData.samplesPerPixel = 10;
+    pushConstantData.maxDepth = 6;
 
-    hittables.Allocate<Sphere>(glm::vec3{ 0.0, 0.0, 0.0 }, 0.5f);
-    hittables.Allocate<Sphere>(glm::vec3{ 0.0, -100.5, 0.0 }, 100.0f);
+    // Camera
+    float vfov = 45.0f;
+    float distToFocus = 3.4f;
+    const float aspectRatio = (float)WIDTH / (float)HEIGHT;
+    glm::vec3 lookfrom{ -2, 2, 1 };
+    glm::vec3 lookat{ 0, 0, -1 };
+    glm::vec3 up{ 0, 1, 0 };
+
+    enum Scene
+    { 
+        Default, Balls, Planes, CornellBox  
+    };
+
+    int scene = Scene::Balls;
+
+    switch (scene)
+    {
+        case Scene::Default:
+        case Scene::Balls:
+        default:
+        {
+            auto material_ground = materials.Allocate<Lambertian>(glm::vec3(0.8, 0.8, 0.0));
+            auto material_center = materials.Allocate<Lambertian>(glm::vec3(0.1, 0.2, 0.5));
+            auto material_left = materials.Allocate<Dielectric>(1.5);
+            auto material_bubble = materials.Allocate<Dielectric>(1.0 / 1.5);
+            auto material_right = materials.Allocate<Metal>(glm::vec3(0.8, 0.6, 0.2), 0.0);
+
+            hittables.Allocate<Sphere>(glm::vec3{ 0.0, -100.5, -1.0 }, 100.0f)->mat = material_ground;
+            hittables.Allocate<Sphere>(glm::vec3{ 0.0,    0.0, -1.2 }, 0.5f)->mat = material_center;
+            hittables.Allocate<Sphere>(glm::vec3{ -1.0,    0.0, -1.0 }, 0.5f)->mat = material_left;
+            hittables.Allocate<Sphere>(glm::vec3{ -1.0,    0.0, -1.0 }, 0.4f)->mat = material_bubble;
+            hittables.Allocate<Sphere>(glm::vec3{ 1.0,    0.0, -1.0 }, 0.5f)->mat = material_right;
+
+            lookfrom = glm::vec3{ -2, 2, 1 };
+            lookat = glm::vec3{ 0, 0, -1 };
+            up = glm::vec3{ 0, 1, 0 };
+            break;
+        }
+        case Scene::Planes:
+        {
+            auto left_red = materials.Allocate<Lambertian>(glm::vec3(1.0, 0.2, 0.2));
+            auto back_green = materials.Allocate<Lambertian>(glm::vec3(0.2, 1.0, 0.2));
+            auto right_blue = materials.Allocate<Lambertian>(glm::vec3(0.2, 0.2, 1.0));
+            auto upper_orange = materials.Allocate<Lambertian>(glm::vec3(1.0, 0.5, 0.0));
+            auto lower_teal = materials.Allocate<Lambertian>(glm::vec3(0.2, 0.8, 0.8));
+
+            // Quads
+            hittables.Allocate<Quad>(glm::vec3(-3, -2, 5), glm::vec3(0, 0, -4), glm::vec3(0, 4, 0))->mat = left_red;;
+            hittables.Allocate<Quad>(glm::vec3(-2, -2, 0), glm::vec3(4, 0, 0), glm::vec3(0, 4, 0))->mat = back_green;;
+            hittables.Allocate<Quad>(glm::vec3(3, -2, 1), glm::vec3(0, 0, 4), glm::vec3(0, 4, 0))->mat = right_blue;;
+            hittables.Allocate<Quad>(glm::vec3(-2, 3, 1), glm::vec3(4, 0, 0), glm::vec3(0, 0, 4))->mat = upper_orange;;
+            hittables.Allocate<Quad>(glm::vec3(-2, -3, 5), glm::vec3(4, 0, 0), glm::vec3(0, 0, -4))->mat = lower_teal;;
+
+            vfov = 80.0f;
+            lookfrom = glm::vec3{ 0, 0, 9 };
+            lookat = glm::vec3{ 0, 0, 0 };
+            up = glm::vec3{ 0, 1, 0 };
+            break;
+        }
+        case Scene::CornellBox:
+        {
+            auto red = materials.Allocate<Lambertian>(glm::vec3(.65, .05, .05));
+            auto white = materials.Allocate<Lambertian>(glm::vec3(.73, .73, .73));
+            auto green = materials.Allocate<Lambertian>(glm::vec3(.12, .45, .15));
+            auto light = materials.Allocate<Diffuselight>(glm::vec3(4, 4, 4));
+            auto blue = materials.Allocate<Lambertian>(glm::vec3(0.0, 0.0, .95));
+
+            // Quads
+            hittables.Allocate<Quad>(glm::vec3(555,   0,   0), glm::vec3(   0, 555, 0), glm::vec3(0,   0,  555))->mat = red;
+            hittables.Allocate<Quad>(glm::vec3(  0,   0,   0), glm::vec3(   0, 555, 0), glm::vec3(0,   0,  555))->mat = green;
+            hittables.Allocate<Quad>(glm::vec3(343, 554, 332), glm::vec3(-130,   0, 0), glm::vec3(0,   0, -105))->mat = light;
+            hittables.Allocate<Quad>(glm::vec3(  0,   0,   0), glm::vec3( 555,   0, 0), glm::vec3(0,   0,  555))->mat = white;
+            hittables.Allocate<Quad>(glm::vec3(555, 555, 555), glm::vec3(-555,   0, 0), glm::vec3(0,   0, -555))->mat = white;
+            hittables.Allocate<Quad>(glm::vec3(  0,   0, 0), glm::vec3( 555,   0, 0), glm::vec3(0, 555,    0))->mat = white;
+
+            vfov = 40.0f;
+            lookfrom = glm::vec3{ 278, 278, 1500 };
+            lookat = glm::vec3{ 278, 278, 0 };
+            up = glm::vec3{ 0, 1, 0 };
+
+            break;
+        }
+    }
 
     pushConstantData.hittableCount = hittables.Count();
 
-#if 0
-    // Camera
-    const float aspectRatio = (float)WIDTH / (float)HEIGHT;
-    float vfov = 30.f;
-    float distToFocus = 1.0f;
-    float aperture = 0.0f;
-    glm::vec3 lookfrom{ 0.0f };
-    glm::vec3 lookat{ 0.0, -distToFocus, 0.0 };
-    glm::vec3 vup{ 0, 1, 0 };
+    m_Camera = Huiluna::EditorCamera(lookfrom, lookat, up, vfov, aspectRatio);
+    //m_Camera.SetDistance(distToFocus);
+    //m_Camera.SetDefocusAngle(10.0);
 
-    glm::vec3 cameraCenter{ 0.0f };
-    //m_Camera = Camera(lookfrom, lookat, vup, vfov, aspectRatio, aperture, distToFocus);
-#endif
-    float vfov = 45.0f;
-    float distToFocus = 2.5f;
-    const float aspectRatio = (float)WIDTH / (float)HEIGHT;
-    m_Camera = Huiluna::EditorCamera(vfov, aspectRatio);
-    m_Camera.SetDistance(distToFocus);
+    ubo.focusDist = distToFocus;
 }
 
 void ComputeShaderApplication::writeMemoryFromHost()
 {
-    //materials.Dump();
+    materials.Dump();
     hittables.Dump();
-    //materials.WriteMemory(device, shaderStorageBuffersMemory[1], shaderStorageBuffersMemory[2]);
-    hittables.WriteMemory(device, shaderStorageBuffersMemory[0], shaderStorageBuffersMemory[1]);
+    materials.WriteMemory(device, shaderStorageBuffersMemory[0], shaderStorageBuffersMemory[1]);
+    hittables.WriteMemory(device, shaderStorageBuffersMemory[2], shaderStorageBuffersMemory[3]);
 }
 
 void ComputeShaderApplication::initWindow()
@@ -244,26 +312,9 @@ void ComputeShaderApplication::mainLoop() {
         ImGui::Text("Last render: %.3fms", lastFrameTime * 1000);
 
         ImGui::Separator();
-        ImGui::Text("Partical Settings");
-        //ImGui::DragFloat2("position", &adjustPosition.x, 0.1f, -1.0f, 1.0f);
-        //ImGui::DragFloat2("velocity", &adjustVelocity.x, 0.1f);
-        //ImGui::ColorEdit3("color", &adjustColor.r);
-
-        if (ImGui::Button("Adjust particles")) {}
+        ImGui::DragFloat("Focus Distance", &ubo.focusDist, 0.025f, 0.0f, 1000.0f);
 
         ImGui::End();
-
-
-#if 0
-        // Viewport
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2{ 0, 0 });
-        ImGui::Begin("Viewport");
-        ImVec2 viewportPanelSize = ImGui::GetContentRegionAvail();
-
-        //ImGui::Image((ImTextureID)storageImages[currentFrame].descriptorSet, ImVec2{ viewportPanelSize.x, viewportPanelSize.y }, ImVec2{ 0, 1 }, ImVec2{ 1, 0 });
-        ImGui::End();
-        ImGui::PopStyleVar();
-#endif
 
         ImGui::Render();
 
@@ -661,12 +712,14 @@ void ComputeShaderApplication::createDescriptorSetLayout() {
 
 void ComputeShaderApplication::createComputeDescriptorSetLayout() {
 
-    std::array<VkDescriptorSetLayoutBinding, 4> layoutBindings =
+    std::array<VkDescriptorSetLayoutBinding, 6> layoutBindings =
     {
         vks::initializers::descriptorSetLayoutBinding(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT, 0),
         vks::initializers::descriptorSetLayoutBinding(VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT, 1),
         vks::initializers::descriptorSetLayoutBinding(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT, 2),
         vks::initializers::descriptorSetLayoutBinding(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT, 3),
+        vks::initializers::descriptorSetLayoutBinding(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT, 4),
+        vks::initializers::descriptorSetLayoutBinding(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT, 5)
     };
 
     VkDescriptorSetLayoutCreateInfo layoutInfo{};
@@ -982,7 +1035,7 @@ void ComputeShaderApplication::createDescriptorPool() {
     poolSizes[2].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
     poolSizes[2].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT) * 2;
 
-    poolSizes[3].type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+    poolSizes[3].type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
     poolSizes[3].descriptorCount = static_cast<uint32_t>(shaderStorageBuffers.size());
 
     VkDescriptorPoolCreateInfo poolInfo{};
@@ -1061,7 +1114,7 @@ void ComputeShaderApplication::createComputeDescriptorSets() {
         uniformBufferInfo.offset = 0;
         uniformBufferInfo.range = sizeof(UniformBufferObject);
 
-        std::array<VkWriteDescriptorSet, 4> descriptorWrites{};
+        std::array<VkWriteDescriptorSet, 6> descriptorWrites{};
         descriptorWrites[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
         descriptorWrites[0].dstSet = computeDescriptorSets[i];
         descriptorWrites[0].dstBinding = 0;
@@ -1082,11 +1135,12 @@ void ComputeShaderApplication::createComputeDescriptorSets() {
         descriptorWrites[1].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
         descriptorWrites[1].descriptorCount = 1;
         descriptorWrites[1].pImageInfo = &descriptorImageInfo;
-        // Hittable Head
-        VkDescriptorBufferInfo headBufferInfo{};
-        headBufferInfo.buffer = shaderStorageBuffers[0];
-        headBufferInfo.offset = 0;
-        headBufferInfo.range = hittables.HeadSize();
+        
+        // Material Head
+        VkDescriptorBufferInfo matHeadBufferInfo{};
+        matHeadBufferInfo.buffer = shaderStorageBuffers[0];
+        matHeadBufferInfo.offset = 0;
+        matHeadBufferInfo.range = materials.HeadSize();
 
         descriptorWrites[2].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
         descriptorWrites[2].dstSet = computeDescriptorSets[i];
@@ -1094,13 +1148,13 @@ void ComputeShaderApplication::createComputeDescriptorSets() {
         descriptorWrites[2].dstArrayElement = 0;
         descriptorWrites[2].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
         descriptorWrites[2].descriptorCount = 1;
-        descriptorWrites[2].pBufferInfo = &headBufferInfo;
-       
-        // Hittable DumpData
-        VkDescriptorBufferInfo dumpBufferInfo{};
-        dumpBufferInfo.buffer = shaderStorageBuffers[1];
-        dumpBufferInfo.offset = 0;
-        dumpBufferInfo.range = hittables.DumpSize();
+        descriptorWrites[2].pBufferInfo = &matHeadBufferInfo;
+
+        // Material DumpData
+        VkDescriptorBufferInfo matDumpBufferInfo{};
+        matDumpBufferInfo.buffer = shaderStorageBuffers[1];
+        matDumpBufferInfo.offset = 0;
+        matDumpBufferInfo.range = materials.DumpSize();
 
         descriptorWrites[3].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
         descriptorWrites[3].dstSet = computeDescriptorSets[i];
@@ -1108,7 +1162,36 @@ void ComputeShaderApplication::createComputeDescriptorSets() {
         descriptorWrites[3].dstArrayElement = 0;
         descriptorWrites[3].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
         descriptorWrites[3].descriptorCount = 1;
-        descriptorWrites[3].pBufferInfo = &dumpBufferInfo;
+        descriptorWrites[3].pBufferInfo = &matDumpBufferInfo;
+
+        
+        // Hittable Head
+        VkDescriptorBufferInfo hitHeadBufferInfo{};
+        hitHeadBufferInfo.buffer = shaderStorageBuffers[2];
+        hitHeadBufferInfo.offset = 0;
+        hitHeadBufferInfo.range = hittables.HeadSize();
+
+        descriptorWrites[4].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        descriptorWrites[4].dstSet = computeDescriptorSets[i];
+        descriptorWrites[4].dstBinding = 4;
+        descriptorWrites[4].dstArrayElement = 0;
+        descriptorWrites[4].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+        descriptorWrites[4].descriptorCount = 1;
+        descriptorWrites[4].pBufferInfo = &hitHeadBufferInfo;
+       
+        // Hittable DumpData
+        VkDescriptorBufferInfo hitDumpBufferInfo{};
+        hitDumpBufferInfo.buffer = shaderStorageBuffers[3];
+        hitDumpBufferInfo.offset = 0;
+        hitDumpBufferInfo.range = hittables.DumpSize();
+
+        descriptorWrites[5].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        descriptorWrites[5].dstSet = computeDescriptorSets[i];
+        descriptorWrites[5].dstBinding = 5;
+        descriptorWrites[5].dstArrayElement = 0;
+        descriptorWrites[5].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+        descriptorWrites[5].descriptorCount = 1;
+        descriptorWrites[5].pBufferInfo = &hitDumpBufferInfo;
 
         vkUpdateDescriptorSets(device, static_cast<uint32_t>(descriptorWrites.size()), descriptorWrites.data(), 0, nullptr);
     }
@@ -1373,6 +1456,9 @@ void ComputeShaderApplication::updateUniformBuffers(uint32_t currentImage) {
 
     ubo.viewInverse = m_Camera.GetViewInverse();
     ubo.projInverse = m_Camera.GetProjectionInverse();
+    ubo.defocusAngle = m_Camera.GetDefocusAngle();
+    ubo.defocusRadius = m_Camera.GetDefocusRadius();
+    //ubo.focusDist = m_Camera.GetDistance();
 
     memcpy(uniformBuffersMapped[currentImage], &ubo, sizeof(ubo));
 }

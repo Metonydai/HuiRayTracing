@@ -38,11 +38,28 @@ bool Hit(Hittable self, Ray r, float t_min, float t_max, out HitRecord rec)
             Init(s, center, radius);
             return Hit(s, r, t_min, t_max, rec);
         }
+        case HittableEnum.Quad:
+        {
+            Quad q;
+            vec4 data;
+            Deref(self, data, self.ptr * 3);
+            vec3 Q =  vec3(data);
+            
+            Deref(self, data, self.ptr * 3 + 1);
+            vec3 u =  vec3(data);
+            
+            Deref(self, data, self.ptr * 3 + 2);
+            vec3 v =  vec3(data);
+
+            Init(q, Q, u, v);
+            return Hit(q, r, t_min, t_max, rec);
+        }
         default:
             return false;
     }
 }
 
+// Sphere
 void Init(inout Sphere self, vec3 center, float radius)
 {
     self.center = center;
@@ -73,4 +90,51 @@ bool Hit(Sphere self, Ray r, float t_min, float t_max, out HitRecord rec)
     vec3 outwardNormal = (rec.p - self.center) / self.radius;
     SetFaceNormal(rec, r, outwardNormal);
     return true;
+}
+
+// Quad
+void Init(inout Quad self, vec3 Q, vec3 u, vec3 v)
+{
+    self.Q = Q;
+    self.u = u;
+    self.v = v;
+}
+
+bool Hit(Quad self, Ray r, float t_min, float t_max, out HitRecord rec)
+{
+    vec3 n = cross(self.u, self.v);
+    vec3 normal = normalize(n);
+    float D = dot(normal, self.Q);
+
+    vec3 w = n / dot(n, n);
+
+    float denom = dot(normal, r.direction);
+
+    // No hit if the ray is parallel to the plane.
+    if (abs(denom) < 1e-8)
+        return false;
+
+    // Return false if the hit point parameter t is outside the ray interval.
+    float t = (D - dot(normal, r.origin)) / denom;
+    if (t < t_min || t_max < t)
+        return false;
+
+    // Determine if the hit point lies within the planar shape using its plane coordinates.
+    vec3 intersection = At(r, t);
+    vec3 planar_hitpt_vector = intersection - self.Q;
+    float alpha = dot(w, cross(planar_hitpt_vector, self.v));
+    float beta  = dot(w, cross(self.u, planar_hitpt_vector));
+
+    if (!IsInterior(alpha, beta))
+        return false;
+
+    rec.t = t;
+    rec.p = At(r, t);
+    SetFaceNormal(rec, r, normal);
+    return true;
+}
+
+bool IsInterior(float a, float b)
+{
+    return 0 <= a && a <= 1 && 0 <= b && b <= 1;
 }
