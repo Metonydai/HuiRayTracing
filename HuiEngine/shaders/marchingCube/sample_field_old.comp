@@ -1,0 +1,43 @@
+#version 450
+
+layout(local_size_x = 8, local_size_y = 8, local_size_z = 8) in;
+
+layout (binding = 0) uniform UniformBufferObject {
+    mat4 viewProjection;
+    vec4 spheres[20]; // {vec3(center), radius}
+    int sphereCount;
+} ubo;
+
+// One float per voxel
+layout(r32f, binding = 1) uniform image3D fieldTex;
+
+void main() {
+    ivec3 id = ivec3(gl_GlobalInvocationID);
+    ivec3 dim = imageSize(fieldTex);
+    if (any(greaterThanEqual(id, dim - 1))) return;
+
+    // Map [0,dim-1] → [-1,1)
+    //vec3 p = vec3(id) / vec3(dim) * 2.0 - 1.0;
+    // [-1,1) -> [-dim/2, dim/2)
+    //p *= vec3(dim) / 2.0;
+
+    // [-1,1) -> [-dim/2, dim/2)
+    vec3 p = vec3(id) - vec3(dim / 2); 
+
+    float f = 0.0;
+    
+    // Field = a * r^6 / R^6 + b * r^4 / R^4 + c * r^2 / R^2 + 1
+    const float a = -0.444444, b = 1.888889, c = -2.444444;
+    for (int i = 0; i < ubo.sphereCount; i++)
+    {
+        vec3 d = p - ubo.spheres[i].xyz;
+        float r2 = dot(d, d);
+        float R2 = ubo.spheres[i].w * ubo.spheres[i].w;
+        float x = r2 / R2;
+        float x2 = x * x;
+        f += a * x2 * x + b * x2 + c * x + 1;
+    }
+
+    imageStore(fieldTex, id, vec4(f, 0, 0, 0));
+}
+

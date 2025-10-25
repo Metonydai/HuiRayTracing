@@ -1,19 +1,26 @@
+#pragma once
+
 #include "VulkanTools.h"
 #include "VulkanInitializers.hpp"
 
-#include "DataDump.h"
+#include "Metaballs.h"
 #include "Camera.h"
 #include "EditorCamera.h"
+#include "StructType.h"
+#include "TinyLoader.h"
+#include "FrameRateCounter.h"
 
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
 
 #define GLM_FORCE_RADIANS
+
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
 #include <iostream>
 #include <fstream>
+#include <memory>
 #include <stdexcept>
 #include <algorithm>
 #include <chrono>
@@ -26,6 +33,7 @@
 #include <optional>
 #include <set>
 #include <random>
+#include <string_view>
 
 static bool screenshotRequested = false;
 
@@ -43,47 +51,16 @@ struct SwapChainSupportDetails {
 };
 
 struct UniformBufferObject {
-    glm::mat4 viewInverse;
-    glm::mat4 projInverse;
-    float defocusAngle;
-    float defocusRadius;
-    float focusDist;
+    glm::mat4 viewProjection;
+    glm::vec4 spheres[20]; // {vec3(center), radius}
+    int sphereCount;
 };
 
-struct Particle {
-    glm::vec2 position;
-    glm::vec2 velocity;
-    glm::vec4 color;
-
-    static VkVertexInputBindingDescription getBindingDescription() {
-        VkVertexInputBindingDescription bindingDescription{};
-        bindingDescription.binding = 0;
-        bindingDescription.stride = sizeof(Particle);
-        bindingDescription.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
-
-        return bindingDescription;
-    }
-
-    static std::array<VkVertexInputAttributeDescription, 3> getAttributeDescriptions() {
-        std::array<VkVertexInputAttributeDescription, 3> attributeDescriptions{};
-
-        attributeDescriptions[0].binding = 0;
-        attributeDescriptions[0].location = 0;
-        attributeDescriptions[0].format = VK_FORMAT_R32G32_SFLOAT;
-        attributeDescriptions[0].offset = offsetof(Particle, position);
-
-        attributeDescriptions[1].binding = 0;
-        attributeDescriptions[1].location = 1;
-        attributeDescriptions[1].format = VK_FORMAT_R32G32_SFLOAT;
-        attributeDescriptions[1].offset = offsetof(Particle, velocity);
-
-        attributeDescriptions[2].binding = 0;
-        attributeDescriptions[2].location = 2;
-        attributeDescriptions[2].format = VK_FORMAT_R32G32B32A32_SFLOAT;
-        attributeDescriptions[2].offset = offsetof(Particle, color);
-
-        return attributeDescriptions;
-    }
+struct PushConstant {
+    VkDeviceAddress vertexBufferAddress;
+    VkDeviceAddress indexBufferAddress;
+    float isoLevel = 1.0;
+    float boxLength;
 };
 
 struct QueueFamilyIndices {
@@ -98,13 +75,13 @@ struct QueueFamilyIndices {
 class ComputeShaderApplication {
 public:
     void run();
-public:
-    HittableDump hittables;
-    MaterialDump materials;
-    PushConstantData pushConstantData;
+    VkDevice GetDevice() { return device; }
 
-    void createScene();
-    void writeMemoryFromHost();
+    inline static GLFWwindow* GetWindow() { return window; }
+
+    GPUMeshBuffers UploadMesh(const std::vector<uint32_t>& indices, const std::vector<Vertex>& vertices);
+
+    std::shared_ptr<LoadedObj> cube;
 public:
     struct StorageImage {
         uint32_t width;
@@ -116,16 +93,49 @@ public:
         VkSampler sampler;
         VkDescriptorSet descriptorSet;
     };
-    
+
     StorageImage storageImages[MAX_FRAMES_IN_FLIGHT];
+public:
+    struct StorageVoxels {
+        uint32_t width;
+        uint32_t height;
+        uint32_t depth;
+        VkFormat format;
+        VkImage image;
+        VkDeviceMemory deviceMemory;
+        VkImageView view;
+        VkDescriptorSet descriptorSet;
+    };
+
+    FrameRateCounter counter{};
+
+    uint32_t maxVertices = 500000, maxIndices = maxVertices * 3;
+    VkBuffer vertexBuffer[MAX_FRAMES_IN_FLIGHT], indexBuffer[MAX_FRAMES_IN_FLIGHT], counterBuffer[MAX_FRAMES_IN_FLIGHT];
+    VkDeviceMemory vertexMemory[MAX_FRAMES_IN_FLIGHT], indexMemory[MAX_FRAMES_IN_FLIGHT], counterMemory[MAX_FRAMES_IN_FLIGHT];
+
+    StorageVoxels storageVoxels[MAX_FRAMES_IN_FLIGHT];
+
+    UniformBufferObject ubo{};
+    PushConstant pushConstant{};
+
+    const uint32_t imageSize = 400;
+    Metaballs metaballs;
+
+    VkPipeline skyboxPipeline;
+    VkPipeline wireframePipeline;
+    VkPipelineLayout wireframePipelineLayout;
+    AllocatedBuffer wireVBuffer;
+    AllocatedBuffer wireIBuffer;
 
 public:
-    UniformBufferObject ubo{};
+    void createSkyboxPipeline();
+    void createWireframePipeline();
+    void createScene();
+
+public:
 
     Huiluna::EditorCamera m_Camera;
 
-public:
-    inline static GLFWwindow* GetWindow() { return window; }
 private:
     static GLFWwindow* window;
 
@@ -154,7 +164,9 @@ private:
 
     VkDescriptorSetLayout computeDescriptorSetLayout;
     VkPipelineLayout computePipelineLayout;
-    VkPipeline computePipeline;
+    VkPipeline computePipelineField;
+    VkPipeline computePipelineMarching;
+    VkPipelineCache pipelineCache;
 
     VkCommandPool commandPool;
 
@@ -201,12 +213,14 @@ private:
     void createLogicalDevice();
     void createSwapChain();
 
+    void createPipelineCache();
+
     void createGraphicsPipeline();
     void createFramebuffers();
     void createImageViews();
     void createRenderPass();
 
-    void createComputePipeline();
+    void createComputePipelines();
 
     void createCommandPool();
     void createCommandBuffers();
@@ -219,10 +233,18 @@ private:
     void createComputeDescriptorSets();
 
     void createShaderStorageImages();
+    void createShaderStorageVoxels();
     void createShaderStorageBuffers();
     void createUniformBuffers();
 
     void createSyncObjects();
+    
+    void createImage(uint32_t width, uint32_t height, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties, VkImage& image, VkDeviceMemory& imageMemory);
+    void createImage3D(uint32_t width, uint32_t height, uint32_t depth, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties, VkImage& image, VkDeviceMemory& imageMemory);
+
+    void copyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size);
+    void createBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer& buffer, VkDeviceMemory& bufferMemory, bool addressBit = false);
+
 private:
     void drawFrame();
     void recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex);
@@ -231,11 +253,9 @@ private:
     VkCommandBuffer beginSingleTimeCommands();
     void endSingleTimeCommands(VkCommandBuffer commandBuffer);
 
-    void copyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size);
-    void createBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer& buffer, VkDeviceMemory& bufferMemory);
     void updateUniformBuffers(uint32_t currentImage);
-    
-    void createImage(uint32_t width, uint32_t height, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties, VkImage& image, VkDeviceMemory& imageMemory);
+    void updatePushConstant(uint32_t currentImage);
+
     void insertImageMemoryBarrier(
         VkCommandBuffer cmdbuffer,
         VkImage image,
@@ -274,4 +294,12 @@ private:
     static std::vector<char> readFile(const std::string& filename);
     static void framebufferResizeCallback(GLFWwindow* window, int width, int height);
     static VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity, VkDebugUtilsMessageTypeFlagsEXT messageType, const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData, void* pUserData);
+
+private:
+    void checkMeshShaderSupport(VkPhysicalDevice physicalDevice);
+
+    PFN_vkCmdDrawMeshTasksEXT vkCmdDrawMeshTasksEXT{ VK_NULL_HANDLE };
+
+    bool meshShaderSupport = false;
+    bool taskShaderSupport = false;
 };

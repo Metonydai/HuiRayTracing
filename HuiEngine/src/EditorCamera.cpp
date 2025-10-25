@@ -122,14 +122,14 @@ namespace Huiluna {
 	{
 		auto [xSpeed, ySpeed] = PanSpeed();
 		m_FocalPoint += -GetRightDirection() * delta.x * xSpeed * m_Distance;
-		m_FocalPoint += GetUpDirection() * delta.y * ySpeed * m_Distance;
+		m_FocalPoint -= GetUpDirection() * delta.y * ySpeed * m_Distance;
 	}
 
 	void EditorCamera::MouseRotate(const glm::vec2& delta)
 	{
 		float yawSign = GetUpDirection().y < 0 ? -1.0f : 1.0f;
 		m_Yaw += yawSign * delta.x * RotationSpeed();
-		m_Pitch += delta.y * RotationSpeed();
+		m_Pitch -= delta.y * RotationSpeed();
 	}
 
 	void EditorCamera::MouseZoom(float delta)

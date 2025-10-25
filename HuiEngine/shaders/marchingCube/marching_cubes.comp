@@ -1,0 +1,143 @@
+﻿// marching_cubes.comp
+#version 450
+#extension GL_GOOGLE_include_directive : require
+#extension GL_EXT_buffer_reference : require
+  
+#include "MarchTable.comph" 
+
+layout(local_size_x = 8, local_size_y = 8, local_size_z = 8) in;
+
+layout (binding = 0) uniform UniformBufferObject {
+    mat4 viewProjection;
+    vec4 spheres[20]; // {vec3(center), radius}
+    int sphereCount;
+} ubo;
+
+layout(r32f, binding = 1) uniform readonly image3D fieldTex;
+
+layout(std430, binding = 2) buffer Counter {
+    uint vertexOffset;
+    uint indexOffset;
+};
+
+struct Vertex {
+    vec3 position;
+    float uv_x;
+    vec3 normal;
+    float uv_y;
+    vec4 color;
+};
+
+layout (buffer_reference, std430) writeonly buffer VertexBuffer{ 
+	Vertex vertices[];
+};
+
+layout (buffer_reference, std430) writeonly buffer IndexBuffer{ 
+	uint indices[];
+};
+
+//push constants block
+layout (push_constant) uniform constants
+{
+	VertexBuffer vertexBuffer;
+    IndexBuffer indexBuffer;
+    float isoLevel;
+} PushConstants;
+
+vec3 cornerOffsets[8] = vec3[8](
+    vec3(0,0,0), vec3(1,0,0), vec3(1,1,0), vec3(0,1,0),
+    vec3(0,0,1), vec3(1,0,1), vec3(1,1,1), vec3(0,1,1)
+);
+
+float sampleField(ivec3 pos) {
+    return imageLoad(fieldTex, pos).r;
+}
+
+void main() {
+    ivec3 cube = ivec3(gl_GlobalInvocationID);
+    ivec3 dim = imageSize(fieldTex);
+    if (any(greaterThanEqual(cube, dim - 1))) return;
+
+    float val[8];
+    for (int i = 0; i < 8; i++) {
+        val[i] = sampleField(cube + ivec3(cornerOffsets[i]));
+    }
+
+    // Determine cube index
+    int cubeIndex = 0;
+    for (int i = 0; i < 8; i++)
+        if (val[i] > PushConstants.isoLevel)
+            cubeIndex |= (1 << i);
+
+
+    int edges = edgeTable[cubeIndex];
+    if (edges == 0) return;
+
+    // Interpolate vertices
+    vec3 vertList[12];
+    for (int e = 0; e < 12; e++) {
+        if ((edges & (1 << e)) != 0) {
+            ivec3 p0 = cube + ivec3(cornerOffsets[cornerIndexAFromEdge[e]]);
+            ivec3 p1 = cube + ivec3(cornerOffsets[cornerIndexBFromEdge[e]]);
+            float v0 = val[cornerIndexAFromEdge[e]];
+            float v1 = val[cornerIndexBFromEdge[e]];
+
+            float t = (PushConstants.isoLevel - v0) / (v1 - v0);
+            vertList[e] = mix(vec3(p0), vec3(p1), t);
+        }
+    }
+
+    VertexBuffer vb = PushConstants.vertexBuffer;
+
+    // Emit triangles
+    for (int i = 0; triangulation[cubeIndex][i] != -1; i += 3) 
+    {
+        uint vertexStart  = atomicAdd(vertexOffset, 3);
+
+
+        vec3 p0 = vertList[triangulation[cubeIndex][i + 0]];
+        vec3 p1 = vertList[triangulation[cubeIndex][i + 1]];
+        vec3 p2 = vertList[triangulation[cubeIndex][i + 2]];
+        
+        vec3 pi[3] = { p0, p1, p2 };
+        // Make an offset 
+        for (int i = 0; i < 3; i++)
+            pi[i] -= dim / 2.0f;
+
+        vec3 n[3];
+
+        float delta = 1.0f / dim.x;
+        vec3 ds[3] = 
+        {
+            vec3(delta, 0, 0),
+            vec3(0, delta, 0),
+            vec3(0, 0, delta),
+        };
+        
+        for (int j = 0; j < 3; j++)
+        {
+            float f0 = 0.0, fx = 0.0, fy = 0.0, fz = 0.0;
+
+            for (int s = 0; s < ubo.sphereCount; s++) {
+                vec3 pos = ubo.spheres[s].xyz;
+                float R = ubo.spheres[s].w;
+
+                f0 += R / length(pi[j] - pos);
+                fx += R / length(pi[j] + ds[0] - pos);
+                fy += R / length(pi[j] + ds[1] - pos);
+                fz += R / length(pi[j] + ds[2] - pos);
+            }
+            n[j] = -1 * normalize(vec3(fx - f0, fy - f0, fz - f0));
+        }
+        
+
+        //vec3 n1 = normalize(cross(p1 - p0, p2 - p0));
+
+        for (int v = 0; v < 3; v++)
+        {
+            // Fill vertex attributes
+            vb.vertices[vertexStart + v].position = pi[v];
+            vb.vertices[vertexStart + v].normal = n[v];
+        }
+    }
+}

@@ -1,0 +1,85 @@
+#version 450
+#extension GL_EXT_mesh_shader : require
+#extension GL_EXT_buffer_reference : require
+
+layout(local_size_x = 21) in;
+//layout(local_size_x = 20) in;
+layout(triangles, max_vertices = 64, max_primitives = 126) out;
+
+layout (binding = 0) uniform uniformBuffer {
+    mat4 viewProjection;
+    vec4 spheres[20];
+	int sphereCount;
+} ubo;
+
+layout (std430, binding = 1) readonly buffer Counter {
+    uint vertexCount;
+    uint indexCount;
+};
+
+struct Vertex {
+    vec3 position;
+    float uv_x;
+    vec3 normal;
+    float uv_y;
+    vec4 color;
+};
+
+layout (buffer_reference, std430) readonly buffer VertexBuffer{ 
+	Vertex vertices[];
+};
+
+layout (buffer_reference, std430) readonly buffer IndexBuffer{ 
+	uint indices[];
+};
+
+//push constants block
+layout (push_constant) uniform constants
+{
+	VertexBuffer vertexBuffer;
+    IndexBuffer indexBuffer;
+    float isoLevel;
+} PushConstants;
+
+layout(location = 0) out VertexOutput
+{
+	vec4 color;
+    vec3 normal;
+} vertexOutput[];
+
+void main()
+{
+    if (gl_WorkGroupID.x == gl_NumWorkGroups.x - 1 && vertexCount % 63 != 0)
+    {
+        uint remains = vertexCount % 63;
+        SetMeshOutputsEXT(remains, remains / 3);
+    }
+    else
+    {
+        SetMeshOutputsEXT(63, 21);
+    }
+
+    // How many triangles to actually output (might be less than max)
+
+    uint globalBase = gl_GlobalInvocationID.x * 3;
+
+    uint localTriID = gl_LocalInvocationID.x;
+    uint localBase = localTriID * 3;
+    
+    VertexBuffer vb = PushConstants.vertexBuffer;
+    //IndexBuffer ib = PushConstants.indexBuffer;
+
+    for (int i = 0; i < 3; i++)
+    {
+        vec4 pi = ubo.viewProjection * vec4(vb.vertices[globalBase + i].position, 1.0);
+        
+        gl_MeshVerticesEXT[localBase + i].gl_Position = pi;
+        vertexOutput[localBase + i].normal = vb.vertices[globalBase + i].normal;
+    }
+
+    vertexOutput[localBase + 0].color = vec4(0.56, 0.83, 1, 1);
+    vertexOutput[localBase + 1].color = vec4(0.56, 0.83, 1, 1);
+    vertexOutput[localBase + 2].color = vec4(0.56, 0.83, 1, 1);
+
+    gl_PrimitiveTriangleIndicesEXT[localTriID] = uvec3(localBase + 0, localBase + 1, localBase + 2);
+}
