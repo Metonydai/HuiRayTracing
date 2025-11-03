@@ -1,6 +1,6 @@
 include "Dependencies.lua"
 
-workspace "HuiRayTracing"
+workspace "HuiEngine"
     architecture "x64"
     startproject "HuiEngine"
 
