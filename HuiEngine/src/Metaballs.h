@@ -5,6 +5,8 @@ class Metaballs {
 public:
     Metaballs() { for (int i = 0; i < 10; i++) radius[i] = 5.0f; }
 
+    bool simulation = false;
+
     glm::vec3 positions[10] = {};
     glm::vec3 velocities[10] = {};
     float radius[10];
@@ -14,6 +16,7 @@ public:
     float m_BoxH = 100.f;
     
     int m_Counts = 0;
+
 
     void OnUpdate(float time);
 

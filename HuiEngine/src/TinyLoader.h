@@ -2,7 +2,7 @@
 
 #include "StructType.h"
 
-class ComputeShaderApplication;
+class VulkanEngine;
 
 class LoadedObj {
 public:
@@ -10,11 +10,11 @@ public:
     uint32_t startIndex;
     uint32_t count;
 
-    ComputeShaderApplication* creator;
+    VulkanEngine* creator;
 
     ~LoadedObj() { clearAll(); };
 private:
     void clearAll();
 };
 
-std::shared_ptr<LoadedObj> loadModel(ComputeShaderApplication* engine, std::string_view path);
+std::shared_ptr<LoadedObj> loadModel(VulkanEngine* engine, std::string_view path);

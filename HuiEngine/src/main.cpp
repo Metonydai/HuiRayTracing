@@ -3,7 +3,7 @@
 #include "vk_engine.h"
 
 int main() {
-    ComputeShaderApplication app;
+    VulkanEngine app;
 
     try {
         app.run();

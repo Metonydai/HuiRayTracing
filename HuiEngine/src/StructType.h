@@ -20,6 +20,7 @@ struct AllocatedBuffer
 {
     VkBuffer buffer;
     VkDeviceMemory memory;
+    void* mapped = nullptr;
 };
 
 // holds the resources needed for a mesh

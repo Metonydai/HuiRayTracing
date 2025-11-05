@@ -4,7 +4,8 @@ void Metaballs::OnUpdate(float time)
 {
 	for (int i = 0; i < m_Counts; i++)
 	{
-		positions[i] += velocities[i] * time;
+		if (simulation)
+			positions[i] += velocities[i] * time;
 
 		if (abs(positions[i].x) + radius[i] > m_BoxL / 2)
 		{

@@ -27,7 +27,7 @@ void LoadedObj::clearAll()
     vkFreeMemory(dv, meshBuffers.indexBuffer.memory, nullptr);
 }
 
-std::shared_ptr<LoadedObj> loadModel(ComputeShaderApplication* engine, std::string_view path)
+std::shared_ptr<LoadedObj> loadModel(VulkanEngine* engine, std::string_view path)
 {
     std::cout << " Loading GLTF: " << path << std::endl;
 
@@ -74,10 +74,8 @@ std::shared_ptr<LoadedObj> loadModel(ComputeShaderApplication* engine, std::stri
                  attrib.colors[3 * index.vertex_index + 0],
                  attrib.colors[3 * index.vertex_index + 1],
                  attrib.colors[3 * index.vertex_index + 2],
-                 0.3f
+                 1.0f
             };
-
-            vertex.color = { 1.0f, 1.0f, 1.0f, 0.1f};
 
             //vertices.push_back(vertex);
             //indices.push_back((uint32_t)indices.size());
@@ -91,7 +89,7 @@ std::shared_ptr<LoadedObj> loadModel(ComputeShaderApplication* engine, std::stri
     }
 
     model.startIndex = 0;
-    model.count = indices.size();
+    model.count = (uint32_t)indices.size();
     model.meshBuffers = engine->UploadMesh(indices, vertices);
 
     return pModel;

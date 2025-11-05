@@ -9,6 +9,7 @@
 #include "StructType.h"
 #include "TinyLoader.h"
 #include "FrameRateCounter.h"
+#include "VulkanTexture.h"
 
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
@@ -72,7 +73,7 @@ struct QueueFamilyIndices {
     }
 };
 
-class ComputeShaderApplication {
+class VulkanEngine {
 public:
     void run();
     VkDevice GetDevice() { return device; }
@@ -82,6 +83,9 @@ public:
     GPUMeshBuffers UploadMesh(const std::vector<uint32_t>& indices, const std::vector<Vertex>& vertices);
 
     std::shared_ptr<LoadedObj> cube;
+
+    VkPhysicalDeviceFeatures enabledFeatures;
+    VkPhysicalDeviceProperties properties;
 public:
     struct StorageImage {
         uint32_t width;
@@ -121,16 +125,69 @@ public:
     const uint32_t imageSize = 400;
     Metaballs metaballs;
 
-    VkPipeline skyboxPipeline;
+    VkPipeline boundingBoxPipeline;
     VkPipeline wireframePipeline;
     VkPipelineLayout wireframePipelineLayout;
     AllocatedBuffer wireVBuffer;
     AllocatedBuffer wireIBuffer;
 
 public:
-    void createSkyboxPipeline();
+    void createBoundingBoxPipeline();
     void createWireframePipeline();
     void createScene();
+
+public:
+
+    bool displaySkybox = true;
+    struct Textures {
+        huiluna::TextureCubeMap environmentCube;
+        // Generated at runtime
+        huiluna::Texture2D lutBrdf;
+        huiluna::TextureCubeMap irradianceCube;
+        huiluna::TextureCubeMap prefilteredCube;
+    } textures;
+
+    struct {
+        VkPipeline skybox{ VK_NULL_HANDLE };
+        VkPipeline pbr{ VK_NULL_HANDLE };
+    } pipelines;
+
+    struct {
+        VkDescriptorSet object{ VK_NULL_HANDLE };
+        VkDescriptorSet skybox{ VK_NULL_HANDLE };
+    } pbrDescriptorSets;
+
+    struct {
+        AllocatedBuffer object;
+        AllocatedBuffer skybox;
+        AllocatedBuffer params;
+    } pbrUniformBuffers;
+
+    struct UBOParams {
+        glm::vec4 lights[4] = {};
+        float exposure = 4.5f;
+        float gamma = 2.2f;
+    } uboParams;
+
+    struct UBOMatrices {
+        glm::mat4 projection;
+        glm::mat4 view;
+        glm::mat4 model;
+        glm::vec3 camPos;
+    } uboMatrices;
+
+    VkPipelineLayout pbrPipelineLayout{ VK_NULL_HANDLE };
+    VkDescriptorSetLayout pbrDescriptorSetLayout{ VK_NULL_HANDLE };
+
+    void createPbrIblPipeline();
+
+    void preparePipelines();
+    void prepareUniformBuffers();
+    void setupDescriptors();
+    void generateBRDFLUT();
+    void generatePrefilteredCube();
+    void generateIrradianceCube();
+
 
 public:
 
@@ -238,24 +295,17 @@ private:
     void createUniformBuffers();
 
     void createSyncObjects();
-    
+public:    
+    static std::vector<char> readFile(const std::string& filename);
+    VkShaderModule createShaderModule(const std::vector<char>& code);
+
     void createImage(uint32_t width, uint32_t height, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties, VkImage& image, VkDeviceMemory& imageMemory);
+    void createImageCubemap(uint32_t width, uint32_t height, uint32_t mipLevels, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties, VkImage& image, VkDeviceMemory& imageMemory);
     void createImage3D(uint32_t width, uint32_t height, uint32_t depth, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties, VkImage& image, VkDeviceMemory& imageMemory);
 
     void copyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size);
     void createBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer& buffer, VkDeviceMemory& bufferMemory, bool addressBit = false);
-
-private:
-    void drawFrame();
-    void recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex);
-    void recordComputeCommandBuffer(VkCommandBuffer commandBuffer);
-
-    VkCommandBuffer beginSingleTimeCommands();
-    void endSingleTimeCommands(VkCommandBuffer commandBuffer);
-
-    void updateUniformBuffers(uint32_t currentImage);
-    void updatePushConstant(uint32_t currentImage);
-
+    
     void insertImageMemoryBarrier(
         VkCommandBuffer cmdbuffer,
         VkImage image,
@@ -266,8 +316,18 @@ private:
         VkPipelineStageFlags srcStageMask,
         VkPipelineStageFlags dstStageMask,
         VkImageSubresourceRange subresourceRange = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1 });
-    
-    VkShaderModule createShaderModule(const std::vector<char>& code);
+
+    VkCommandBuffer beginSingleTimeCommands();
+    void endSingleTimeCommands(VkCommandBuffer commandBuffer, VkQueue queue);
+private:
+    void drawFrame();
+    void recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex);
+    void recordComputeCommandBuffer(VkCommandBuffer commandBuffer);
+
+
+    void updateUniformBuffers(uint32_t currentImage);
+    void updatePushConstant(uint32_t currentImage);
+
 private:
     void saveStorageImage(const StorageImage& swapChainImage, const std::string& outputDir = "result_images/", const std::string& filename = "Huiyu");
 
@@ -291,7 +351,6 @@ private:
     std::vector<const char*> getRequiredExtensions();
     bool checkValidationLayerSupport();
 
-    static std::vector<char> readFile(const std::string& filename);
     static void framebufferResizeCallback(GLFWwindow* window, int width, int height);
     static VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity, VkDebugUtilsMessageTypeFlagsEXT messageType, const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData, void* pUserData);
 

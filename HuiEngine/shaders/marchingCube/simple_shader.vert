@@ -6,11 +6,11 @@ layout (binding = 0) uniform uniformBuffer {
 	int sphereCount;
 } ubo;
 
-layout(location = 0) in vec3 inPosition;
-layout(location = 1) in float inUVx;
-layout(location = 2) in vec3 inNormal;
-layout(location = 3) in vec3 inUVy;
-layout(location = 4) in vec4 inColor;
+layout (location = 0) in vec3 inPosition;
+layout (location = 1) in float inUVx;
+layout (location = 2) in vec3 inNormal;
+layout (location = 3) in float inUVy;
+layout (location = 4) in vec4 inColor;
 
 layout (location = 0) out vec3 outNormal;
 layout (location = 1) out vec2 outUV;
@@ -33,5 +33,6 @@ void main()
 
     gl_Position = ubo.viewProjection * scaleMat * vec4(inPosition, 1.f);
     outColor = inColor;
+    outColor.a = 0.1;
     outUV = vec2(inUVx, inUVy);
 }

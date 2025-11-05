@@ -7,21 +7,21 @@ namespace Huiluna {
 
     bool Input::IsKeyPressed(KeyCode keycode)
     {
-        auto window = ComputeShaderApplication::GetWindow();
+        auto window = VulkanEngine::GetWindow();
         auto state = glfwGetKey(window, static_cast<int32_t>(keycode));
         return state == GLFW_PRESS;
     }
 
     bool Input::IsMouseButtonPressed(MouseCode button)
     {
-        auto window = ComputeShaderApplication::GetWindow();
+        auto window = VulkanEngine::GetWindow();
         auto state = glfwGetMouseButton(window, static_cast<int32_t>(button));
         return state == GLFW_PRESS;
     }
 
     std::pair<float, float> Input::GetMousePosition()
     {
-        auto window = ComputeShaderApplication::GetWindow();
+        auto window = VulkanEngine::GetWindow();
         double xpos, ypos;
         glfwGetCursorPos(window, &xpos, &ypos);
 
