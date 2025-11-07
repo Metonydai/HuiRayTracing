@@ -6,13 +6,14 @@ layout(local_size_x = 21) in;
 //layout(local_size_x = 20) in;
 layout(triangles, max_vertices = 64, max_primitives = 126) out;
 
-layout (binding = 0) uniform uniformBuffer {
-    mat4 viewProjection;
-    vec4 spheres[20];
+layout (binding = 0) uniform UBO {
+	mat4 viewProjection;
+	vec4 spheres[20];
+	vec4 camPos;
 	int sphereCount;
 } ubo;
 
-layout (std430, binding = 1) readonly buffer Counter {
+layout (std430, binding = 2) readonly buffer Counter {
     uint vertexCount;
     uint indexCount;
 };
@@ -39,11 +40,12 @@ layout (push_constant) uniform constants
 	VertexBuffer vertexBuffer;
     IndexBuffer indexBuffer;
     float isoLevel;
+    float scale;
 } PushConstants;
 
 layout(location = 0) out VertexOutput
 {
-	vec4 color;
+	vec3 position;
     vec3 normal;
 } vertexOutput[];
 
@@ -75,11 +77,12 @@ void main()
         
         gl_MeshVerticesEXT[localBase + i].gl_Position = pi;
         vertexOutput[localBase + i].normal = vb.vertices[globalBase + i].normal;
+        vertexOutput[localBase + i].position = vb.vertices[globalBase + i].position;
     }
 
-    vertexOutput[localBase + 0].color = vec4(0.56, 0.83, 1, 1);
-    vertexOutput[localBase + 1].color = vec4(0.56, 0.83, 1, 1);
-    vertexOutput[localBase + 2].color = vec4(0.56, 0.83, 1, 1);
+    //vertexOutput[localBase + 0].color = vec4(0.56, 0.83, 1, 1);
+    //vertexOutput[localBase + 1].color = vec4(0.56, 0.83, 1, 1);
+    //vertexOutput[localBase + 2].color = vec4(0.56, 0.83, 1, 1);
 
     gl_PrimitiveTriangleIndicesEXT[localTriID] = uvec3(localBase + 0, localBase + 1, localBase + 2);
 }

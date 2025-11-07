@@ -1,15 +1,14 @@
 #version 450
 
-layout (location = 0) in VertexInput {
-  vec3 inWorldPos;
-  vec3 inNormal;
-};
+layout (location = 0) in vec3 inWorldPos;
+layout (location = 1) in vec3 inNormal;
+layout (location = 2) in vec2 inUV;
 
 layout (binding = 0) uniform UBO {
-	mat4 viewProjection;
-	vec4 spheres[20];
-	vec4 camPos;
-	int sphereCount;
+	mat4 projection;
+	mat4 model;
+	mat4 view;
+	vec3 camPos;
 } ubo;
 
 layout (binding = 1) uniform UBOParams {
@@ -18,27 +17,18 @@ layout (binding = 1) uniform UBOParams {
 	float gamma;
 } uboParams;
 
-layout (binding = 3) uniform samplerCube samplerIrradiance;
-layout (binding = 4) uniform sampler2D samplerBRDFLUT;
-layout (binding = 5) uniform samplerCube prefilteredMap;
-
-//layout (push_constant) uniform constants
-//{
-//	  layout(offset = 00) VertexBuffer vertexBuffer;
-//    layout(offset = 08) IndexBuffer indexBuffer;
-//    layout(offset = 16) float isoLevel;
-//    layout(offset = 20) float boxLength;
-//} PushConstants;
-
-layout (push_constant) uniform PushConsts {
-	layout(offset = 24) float roughness;
-	layout(offset = 28) float metallic;
-	layout(offset = 32) float specular;
-	layout(offset = 36) float r;
-	layout(offset = 40) float g;
-	layout(offset = 44) float b;
+layout(push_constant) uniform PushConsts {
+	layout(offset = 12) float roughness;
+	layout(offset = 16) float metallic;
+	layout(offset = 20) float specular;
+	layout(offset = 24) float r;
+	layout(offset = 28) float g;
+	layout(offset = 32) float b;
 } material;
 
+layout (binding = 2) uniform samplerCube samplerIrradiance;
+layout (binding = 3) uniform sampler2D samplerBRDFLUT;
+layout (binding = 4) uniform samplerCube prefilteredMap;
 
 layout (location = 0) out vec4 outColor;
 
@@ -128,7 +118,7 @@ vec3 specularContribution(vec3 L, vec3 V, vec3 N, vec3 F0, float metallic, float
 void main()
 {		
 	vec3 N = normalize(inNormal);
-	vec3 V = normalize(vec3(ubo.camPos) - inWorldPos);
+	vec3 V = normalize(ubo.camPos - inWorldPos);
 	vec3 R = reflect(-V, N); 
 
 	float metallic = material.metallic;

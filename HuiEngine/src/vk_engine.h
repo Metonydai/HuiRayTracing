@@ -54,6 +54,7 @@ struct SwapChainSupportDetails {
 struct UniformBufferObject {
     glm::mat4 viewProjection;
     glm::vec4 spheres[20]; // {vec3(center), radius}
+    glm::vec4 camPos;
     int sphereCount;
 };
 
@@ -62,6 +63,23 @@ struct PushConstant {
     VkDeviceAddress indexBufferAddress;
     float isoLevel = 1.0;
     float boxLength;
+};
+
+struct Material {
+    // Parameter block used as push constant block
+    struct PushBlock {
+        float roughness = 0.0f;
+        float metallic = 0.0f;
+        float specular = 0.0f;
+        float r, g, b;
+    } params;
+    std::string name;
+    Material() {};
+    Material(std::string n, glm::vec3 c) : name(n) {
+        params.r = c.r;
+        params.g = c.g;
+        params.b = c.b;
+    };
 };
 
 struct QueueFamilyIndices {
@@ -179,6 +197,13 @@ public:
     VkPipelineLayout pbrPipelineLayout{ VK_NULL_HANDLE };
     VkDescriptorSetLayout pbrDescriptorSetLayout{ VK_NULL_HANDLE };
 
+    // Default materials to select from
+    std::vector<Material> materials;
+    Material::PushBlock selectedMat{};
+    int32_t materialIndex = 0;
+
+    std::vector<std::string> materialNames;
+
     void createPbrIblPipeline();
 
     void preparePipelines();
@@ -187,7 +212,6 @@ public:
     void generateBRDFLUT();
     void generatePrefilteredCube();
     void generateIrradianceCube();
-
 
 public:
 

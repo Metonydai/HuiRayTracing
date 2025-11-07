@@ -1,8 +1,9 @@
 #version 450
 
-layout (binding = 0) uniform uniformBuffer {
-    mat4 viewProjection;
-    vec4 spheres[20];
+layout (binding = 0) uniform UBO {
+	mat4 viewProjection;
+	vec4 spheres[20];
+	vec4 camPos;
 	int sphereCount;
 } ubo;
 
