@@ -213,6 +213,12 @@ public:
     void generatePrefilteredCube();
     void generateIrradianceCube();
 
+    struct DepthImage {
+        VkImage image;
+        VkDeviceMemory memory;
+        VkImageView view;
+    } depthImage;
+
 public:
 
     Huiluna::EditorCamera m_Camera;
@@ -293,6 +299,7 @@ private:
     void createSurface();
     void createLogicalDevice();
     void createSwapChain();
+    void createDepthResources();
 
     void createPipelineCache();
 
@@ -380,6 +387,10 @@ private:
 
 private:
     void checkMeshShaderSupport(VkPhysicalDevice physicalDevice);
+    inline bool hasStencilComponent(VkFormat format) {
+        return format == VK_FORMAT_D32_SFLOAT_S8_UINT || format == VK_FORMAT_D24_UNORM_S8_UINT; }
+    VkFormat findDepthFormat();
+    VkFormat findSupportedFormat(const std::vector<VkFormat>& candidates, VkImageTiling tiling, VkFormatFeatureFlags features);
 
     PFN_vkCmdDrawMeshTasksEXT vkCmdDrawMeshTasksEXT{ VK_NULL_HANDLE };
 
