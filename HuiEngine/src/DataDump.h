@@ -16,6 +16,7 @@ struct PushConstantData
 	uint32_t samplesPerPixel;
 	//uint32_t totalSamples;
 	uint32_t maxDepth;
+	uint32_t frameIndex;
 };
 
 template<typename Ty, typename GlslTy, typename DumpTy>
@@ -237,11 +238,19 @@ public:
 	{
 		heads.clear();
 		heads.reserve(handles.size());
+		uint32_t ptr = 0;
+		uint32_t accumulate = 0;
 		for (auto handle : handles)
 		{
-			heads.push_back({ handle->type, handle->ptr, handle->mat->ptr });
 			auto vec4s = handle->Dump();
-			for (const auto& v : vec4s) dump.push_back(v);
+			for (const auto& v : vec4s)
+			{
+				accumulate++;
+				dump.push_back(v);
+			}
+
+			heads.push_back({ handle->type, ptr, handle->mat->ptr });
+			ptr = accumulate;
 		}
 
 	}

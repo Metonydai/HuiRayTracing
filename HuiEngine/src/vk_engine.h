@@ -97,6 +97,7 @@ struct QueueFamilyIndices {
 
 class ComputeShaderApplication {
 public:
+    uint32_t frameIndex{ 0 };
     void run();
 public:
     HittableDump hittables;
@@ -116,9 +117,9 @@ public:
         VkSampler sampler;
         VkDescriptorSet descriptorSet;
     };
-    
-    StorageImage storageImages[MAX_FRAMES_IN_FLIGHT];
 
+    StorageImage storageImages[2];
+    
 public:
     UniformBufferObject ubo{};
 

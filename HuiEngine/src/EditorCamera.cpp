@@ -87,6 +87,7 @@ namespace Huiluna {
 
 	void EditorCamera::OnUpdate(Timestep ts)
 	{
+		m_Move = false;
 		if (Input::IsKeyPressed(Key::LeftAlt))
 		{
 			const glm::vec2& mouse{ Input::GetMouseX(), Input::GetMouseY() };
@@ -123,6 +124,7 @@ namespace Huiluna {
 		auto [xSpeed, ySpeed] = PanSpeed();
 		m_FocalPoint += -GetRightDirection() * delta.x * xSpeed * m_Distance;
 		m_FocalPoint += GetUpDirection() * delta.y * ySpeed * m_Distance;
+		m_Move = true;
 	}
 
 	void EditorCamera::MouseRotate(const glm::vec2& delta)
@@ -130,6 +132,7 @@ namespace Huiluna {
 		float yawSign = GetUpDirection().y < 0 ? -1.0f : 1.0f;
 		m_Yaw += yawSign * delta.x * RotationSpeed();
 		m_Pitch += delta.y * RotationSpeed();
+		m_Move = true;
 	}
 
 	void EditorCamera::MouseZoom(float delta)
@@ -140,6 +143,7 @@ namespace Huiluna {
 			m_FocalPoint += GetForwardDirection();
 			m_Distance = 1.0f;
 		}
+		m_Move = true;
 	}
 
 	glm::vec3 EditorCamera::GetUpDirection() const

@@ -20,6 +20,8 @@ namespace Huiluna {
 		void OnUpdate(Timestep ts);
 		void OnEvent(Event& e);
 
+		bool IsMove() const { return m_Move; }
+
 		inline float GetDistance() const { return m_Distance; }
 		inline void SetDistance(float distance) { m_Distance = distance; UpdateView(); }
 
@@ -77,6 +79,7 @@ namespace Huiluna {
 		float m_Pitch = 0.0f, m_Yaw = 0.0f;
 
 		float m_ViewportWidth = 1280, m_ViewportHeight = 720;
+		bool m_Move{};
 	};
 
 }

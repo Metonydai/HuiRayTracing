@@ -13,6 +13,7 @@ layout (push_constant) uniform PushConstants {
     uint hittableCount;
     uint samples;
     uint maxDepth;
+    uint frameIndex; 
 } push;
 
 
@@ -24,10 +25,11 @@ layout (set = 0, binding = 0) uniform UniformBuffer {
     float focusDist;
 } ubo;
 
-layout (set = 0, binding = 1, rgba8) uniform writeonly image2D outputImage;
+layout (set = 0, binding = 1, rgba8) uniform readonly image2D inputImage;
+layout (set = 0, binding = 2, rgba8) uniform writeonly image2D outputImage;
 
 // Material related buffer
-layout (set = 0, binding = 2, std430) readonly buffer MaterialBuffer
+layout (set = 0, binding = 3, std430) readonly buffer MaterialBuffer
 {
     Material materials[];
 };
@@ -35,7 +37,7 @@ layout (set = 0, binding = 2, std430) readonly buffer MaterialBuffer
 Interface
 void Deref(out Material mat, Pointer ptr) { mat = materials[ptr]; }
 
-layout (set = 0, binding = 3, std430) readonly buffer MaterialDumpBuffer
+layout (set = 0, binding = 4, std430) readonly buffer MaterialDumpBuffer
 {
     vec4 data[];
 } materialData;
@@ -44,7 +46,7 @@ Interface
 void Deref(Material, out vec4 data, Pointer ptr) { data = materialData.data[ptr];}
 
 // Hittable related buffer
-layout (set = 0, binding = 4, std430) readonly buffer HittableBuffer
+layout (set = 0, binding = 5, std430) readonly buffer HittableBuffer
 {
     Hittable hittables[];
 };
@@ -52,7 +54,7 @@ layout (set = 0, binding = 4, std430) readonly buffer HittableBuffer
 Interface
 void Deref(out Hittable hittable, Pointer ptr) { hittable = hittables[ptr]; }
 
-layout (set = 0, binding = 5, std430) readonly buffer HittableDumpBuffer
+layout (set = 0, binding = 6, std430) readonly buffer HittableDumpBuffer
 {
     vec4 data[];
 } hittableData;
@@ -95,7 +97,7 @@ vec3 RayColor(const in Ray ray)
 
 void main() 
 {
-    Seed(gl_GlobalInvocationID.xy, push.screenSize, push.samples);
+    Seed(gl_GlobalInvocationID.xy, push.screenSize, push.samples * push.frameIndex);
 	
     vec2 dim = imageSize(outputImage); // 2048 * 2048
 
@@ -105,6 +107,10 @@ void main()
     int i = int(gl_GlobalInvocationID.x);
     int j = int(gl_GlobalInvocationID.y);
 
+    vec3 prevColor = vec3(imageLoad(inputImage, ivec2(gl_GlobalInvocationID.xy)));
+    
+    float weight = 1.0f / (float(push.frameIndex) + 1.0f);
+    
     vec3 finalColor = vec3(0);
 
     for (int s = 0; s < push.samples; s++)
@@ -133,6 +139,8 @@ void main()
     }
 
     finalColor /= push.samples;
+
+    finalColor = prevColor * (1.0f - weight) + finalColor * weight;
 
 	imageStore(outputImage, ivec2(gl_GlobalInvocationID.xy), vec4(finalColor, 1.0));
 }

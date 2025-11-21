@@ -65,7 +65,7 @@ void ComputeShaderApplication::createScene()
 {
     pushConstantData.screenSize[0] = WIDTH;
     pushConstantData.screenSize[1] = HEIGHT;
-    pushConstantData.samplesPerPixel = 10;
+    pushConstantData.samplesPerPixel = 15;
     pushConstantData.maxDepth = 6;
 
     // Camera
@@ -81,7 +81,7 @@ void ComputeShaderApplication::createScene()
         Default, Balls, Planes, CornellBox  
     };
 
-    int scene = Scene::Balls;
+    int scene = Scene::CornellBox;
 
     switch (scene)
     {
@@ -134,14 +134,19 @@ void ComputeShaderApplication::createScene()
             auto green = materials.Allocate<Lambertian>(glm::vec3(.12, .45, .15));
             auto light = materials.Allocate<Diffuselight>(glm::vec3(4, 4, 4));
             auto blue = materials.Allocate<Lambertian>(glm::vec3(0.0, 0.0, .95));
+            auto glass = materials.Allocate<Dielectric>(1.5);
+            auto mirror = materials.Allocate<Metal>(glm::vec3(0.5, 0.5, 0.5), 0.0);
+
 
             // Quads
+            //hittables.Allocate<Sphere>(glm::vec3(277, 50, 330), 50)->mat = mirror;
             hittables.Allocate<Quad>(glm::vec3(555,   0,   0), glm::vec3(   0, 555, 0), glm::vec3(0,   0,  555))->mat = red;
             hittables.Allocate<Quad>(glm::vec3(  0,   0,   0), glm::vec3(   0, 555, 0), glm::vec3(0,   0,  555))->mat = green;
             hittables.Allocate<Quad>(glm::vec3(343, 554, 332), glm::vec3(-130,   0, 0), glm::vec3(0,   0, -105))->mat = light;
             hittables.Allocate<Quad>(glm::vec3(  0,   0,   0), glm::vec3( 555,   0, 0), glm::vec3(0,   0,  555))->mat = white;
             hittables.Allocate<Quad>(glm::vec3(555, 555, 555), glm::vec3(-555,   0, 0), glm::vec3(0,   0, -555))->mat = white;
-            hittables.Allocate<Quad>(glm::vec3(  0,   0, 0), glm::vec3( 555,   0, 0), glm::vec3(0, 555,    0))->mat = white;
+            hittables.Allocate<Quad>(glm::vec3(  0,   0,   0), glm::vec3( 555,   0, 0), glm::vec3(0, 555,    0))->mat = white;
+            hittables.Allocate<Sphere>(glm::vec3(277, 100, 230), 100)->mat = glass;
 
             vfov = 40.0f;
             lookfrom = glm::vec3{ 278, 278, 1500 };
@@ -284,17 +289,17 @@ void ComputeShaderApplication::initImgui() {
 
     io.FontGlobalScale = 1.5f;
 
-    // Create Descriptor Set using ImGUI's implementation
-    for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
+    for (int i = 0; i < 2; i++)
     {
+        // Create Descriptor Set using ImGUI's implementation
         storageImages[i].descriptorSet = ImGui_ImplVulkan_AddTexture(storageImages[i].sampler, storageImages[i].view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
     }
 }
 
 void ComputeShaderApplication::mainLoop() {
     while (!glfwWindowShouldClose(window)) {
+        m_Camera.OnUpdate((float)lastFrameTime);
         glfwPollEvents();  // process inputs and OS events
-
 
         ImGuiIO& io = ImGui::GetIO();
 
@@ -319,7 +324,6 @@ void ComputeShaderApplication::mainLoop() {
         ImGui::Render();
 
         drawFrame();
-        m_Camera.OnUpdate((float)lastFrameTime);
 
         // Update and Render additional Platform Windows
         if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable)
@@ -331,6 +335,8 @@ void ComputeShaderApplication::mainLoop() {
         double currentTime = glfwGetTime();
         lastFrameTime = (currentTime - lastTime);
         lastTime = currentTime;
+
+        frameIndex = m_Camera.IsMove() ? 0 : (frameIndex + 1);
     }
 
     vkDeviceWaitIdle(device);
@@ -380,14 +386,14 @@ void ComputeShaderApplication::cleanup() {
         vkFreeMemory(device, shaderStorageBuffersMemory[i], nullptr);
     }
 
-    for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+    for (uint32_t i = 0; i < 2; i++)
+    {
         vkDestroySampler(device, storageImages[i].sampler, nullptr);
         vkDestroyImageView(device, storageImages[i].view, nullptr);
 
         vkDestroyImage(device, storageImages[i].image, nullptr);
         vkFreeMemory(device, storageImages[i].deviceMemory, nullptr);
     }
-
 
     for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
         vkDestroySemaphore(device, renderFinishedSemaphores[i], nullptr);
@@ -712,14 +718,15 @@ void ComputeShaderApplication::createDescriptorSetLayout() {
 
 void ComputeShaderApplication::createComputeDescriptorSetLayout() {
 
-    std::array<VkDescriptorSetLayoutBinding, 6> layoutBindings =
+    std::array<VkDescriptorSetLayoutBinding, 7> layoutBindings =
     {
         vks::initializers::descriptorSetLayoutBinding(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT, 0),
         vks::initializers::descriptorSetLayoutBinding(VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT, 1),
-        vks::initializers::descriptorSetLayoutBinding(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT, 2),
+        vks::initializers::descriptorSetLayoutBinding(VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT, 2),
         vks::initializers::descriptorSetLayoutBinding(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT, 3),
         vks::initializers::descriptorSetLayoutBinding(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT, 4),
-        vks::initializers::descriptorSetLayoutBinding(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT, 5)
+        vks::initializers::descriptorSetLayoutBinding(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT, 5),
+        vks::initializers::descriptorSetLayoutBinding(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT, 6)
     };
 
     VkDescriptorSetLayoutCreateInfo layoutInfo{};
@@ -945,7 +952,7 @@ void ComputeShaderApplication::createShaderStorageImages() {
 
     VkCommandBuffer layoutCmd = beginSingleTimeCommands();
 
-    for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
+    for (int i = 0; i < 2; i++)
     {
         storageImages[i].width = imageSize;
         storageImages[i].height = imageSize;
@@ -1109,12 +1116,13 @@ void ComputeShaderApplication::createComputeDescriptorSets() {
     }
 
     for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+        std::array<VkWriteDescriptorSet, 7> descriptorWrites{};
+        //////////////////////////////////////////////////////////////////////
         VkDescriptorBufferInfo uniformBufferInfo{};
         uniformBufferInfo.buffer = uniformBuffers[i];
         uniformBufferInfo.offset = 0;
         uniformBufferInfo.range = sizeof(UniformBufferObject);
 
-        std::array<VkWriteDescriptorSet, 6> descriptorWrites{};
         descriptorWrites[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
         descriptorWrites[0].dstSet = computeDescriptorSets[i];
         descriptorWrites[0].dstBinding = 0;
@@ -1122,11 +1130,11 @@ void ComputeShaderApplication::createComputeDescriptorSets() {
         descriptorWrites[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
         descriptorWrites[0].descriptorCount = 1;
         descriptorWrites[0].pBufferInfo = &uniformBufferInfo;
-
-        VkDescriptorImageInfo descriptorImageInfo{};
-        descriptorImageInfo.sampler = storageImages[i].sampler;
-        descriptorImageInfo.imageView = storageImages[i].view;
-        descriptorImageInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+        //////////////////////////////////////////////////////////////////////
+        VkDescriptorImageInfo descriptorImageInfoLast{};
+        descriptorImageInfoLast.sampler = storageImages[(i - 1) % 2].sampler;
+        descriptorImageInfoLast.imageView = storageImages[(i - 1) % 2].view;
+        descriptorImageInfoLast.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
 
         descriptorWrites[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
         descriptorWrites[1].dstSet = computeDescriptorSets[i];
@@ -1134,27 +1142,27 @@ void ComputeShaderApplication::createComputeDescriptorSets() {
         descriptorWrites[1].dstArrayElement = 0;
         descriptorWrites[1].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
         descriptorWrites[1].descriptorCount = 1;
-        descriptorWrites[1].pImageInfo = &descriptorImageInfo;
-        
-        // Material Head
-        VkDescriptorBufferInfo matHeadBufferInfo{};
-        matHeadBufferInfo.buffer = shaderStorageBuffers[0];
-        matHeadBufferInfo.offset = 0;
-        matHeadBufferInfo.range = materials.HeadSize();
+        descriptorWrites[1].pImageInfo = &descriptorImageInfoLast;
+        //////////////////////////////////////////////////////////////////////
+        VkDescriptorImageInfo descriptorImageInfoCurrent{};
+        descriptorImageInfoCurrent.sampler = storageImages[i].sampler;
+        descriptorImageInfoCurrent.imageView = storageImages[i].view;
+        descriptorImageInfoCurrent.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
 
         descriptorWrites[2].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
         descriptorWrites[2].dstSet = computeDescriptorSets[i];
         descriptorWrites[2].dstBinding = 2;
         descriptorWrites[2].dstArrayElement = 0;
-        descriptorWrites[2].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+        descriptorWrites[2].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
         descriptorWrites[2].descriptorCount = 1;
-        descriptorWrites[2].pBufferInfo = &matHeadBufferInfo;
+        descriptorWrites[2].pImageInfo = &descriptorImageInfoCurrent;
+        //////////////////////////////////////////////////////////////////////
 
-        // Material DumpData
-        VkDescriptorBufferInfo matDumpBufferInfo{};
-        matDumpBufferInfo.buffer = shaderStorageBuffers[1];
-        matDumpBufferInfo.offset = 0;
-        matDumpBufferInfo.range = materials.DumpSize();
+        // Material Head
+        VkDescriptorBufferInfo matHeadBufferInfo{};
+        matHeadBufferInfo.buffer = shaderStorageBuffers[0];
+        matHeadBufferInfo.offset = 0;
+        matHeadBufferInfo.range = materials.HeadSize();
 
         descriptorWrites[3].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
         descriptorWrites[3].dstSet = computeDescriptorSets[i];
@@ -1162,14 +1170,13 @@ void ComputeShaderApplication::createComputeDescriptorSets() {
         descriptorWrites[3].dstArrayElement = 0;
         descriptorWrites[3].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
         descriptorWrites[3].descriptorCount = 1;
-        descriptorWrites[3].pBufferInfo = &matDumpBufferInfo;
-
-        
-        // Hittable Head
-        VkDescriptorBufferInfo hitHeadBufferInfo{};
-        hitHeadBufferInfo.buffer = shaderStorageBuffers[2];
-        hitHeadBufferInfo.offset = 0;
-        hitHeadBufferInfo.range = hittables.HeadSize();
+        descriptorWrites[3].pBufferInfo = &matHeadBufferInfo;
+        //////////////////////////////////////////////////////////////////////
+        // Material DumpData
+        VkDescriptorBufferInfo matDumpBufferInfo{};
+        matDumpBufferInfo.buffer = shaderStorageBuffers[1];
+        matDumpBufferInfo.offset = 0;
+        matDumpBufferInfo.range = materials.DumpSize();
 
         descriptorWrites[4].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
         descriptorWrites[4].dstSet = computeDescriptorSets[i];
@@ -1177,13 +1184,13 @@ void ComputeShaderApplication::createComputeDescriptorSets() {
         descriptorWrites[4].dstArrayElement = 0;
         descriptorWrites[4].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
         descriptorWrites[4].descriptorCount = 1;
-        descriptorWrites[4].pBufferInfo = &hitHeadBufferInfo;
-       
-        // Hittable DumpData
-        VkDescriptorBufferInfo hitDumpBufferInfo{};
-        hitDumpBufferInfo.buffer = shaderStorageBuffers[3];
-        hitDumpBufferInfo.offset = 0;
-        hitDumpBufferInfo.range = hittables.DumpSize();
+        descriptorWrites[4].pBufferInfo = &matDumpBufferInfo;
+        //////////////////////////////////////////////////////////////////////
+        // Hittable Head
+        VkDescriptorBufferInfo hitHeadBufferInfo{};
+        hitHeadBufferInfo.buffer = shaderStorageBuffers[2];
+        hitHeadBufferInfo.offset = 0;
+        hitHeadBufferInfo.range = hittables.HeadSize();
 
         descriptorWrites[5].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
         descriptorWrites[5].dstSet = computeDescriptorSets[i];
@@ -1191,7 +1198,23 @@ void ComputeShaderApplication::createComputeDescriptorSets() {
         descriptorWrites[5].dstArrayElement = 0;
         descriptorWrites[5].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
         descriptorWrites[5].descriptorCount = 1;
-        descriptorWrites[5].pBufferInfo = &hitDumpBufferInfo;
+        descriptorWrites[5].pBufferInfo = &hitHeadBufferInfo;
+        //////////////////////////////////////////////////////////////////////
+
+        // Hittable DumpData
+        VkDescriptorBufferInfo hitDumpBufferInfo{};
+        hitDumpBufferInfo.buffer = shaderStorageBuffers[3];
+        hitDumpBufferInfo.offset = 0;
+        hitDumpBufferInfo.range = hittables.DumpSize();
+
+        descriptorWrites[6].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        descriptorWrites[6].dstSet = computeDescriptorSets[i];
+        descriptorWrites[6].dstBinding = 6;
+        descriptorWrites[6].dstArrayElement = 0;
+        descriptorWrites[6].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+        descriptorWrites[6].descriptorCount = 1;
+        descriptorWrites[6].pBufferInfo = &hitDumpBufferInfo;
+        //////////////////////////////////////////////////////////////////////
 
         vkUpdateDescriptorSets(device, static_cast<uint32_t>(descriptorWrites.size()), descriptorWrites.data(), 0, nullptr);
     }
@@ -1404,6 +1427,8 @@ void ComputeShaderApplication::recordComputeCommandBuffer(VkCommandBuffer comman
     if (vkBeginCommandBuffer(commandBuffer, &beginInfo) != VK_SUCCESS) {
         throw std::runtime_error("failed to begin recording compute command buffer!");
     }
+
+    pushConstantData.frameIndex = frameIndex;
 
     vkCmdPushConstants(
         commandBuffer,
